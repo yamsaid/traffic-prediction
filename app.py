@@ -1,635 +1,674 @@
-# app.py
-import streamlit as st
-import pandas as pd
+﻿from datetime import date, datetime
+
+import joblib
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import joblib
 import shap
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
-import warnings
-warnings.filterwarnings("ignore")
+import streamlit as st
 
-# ============================================
-# CONFIGURATION GÉNÉRALE
-# ============================================
+
 st.set_page_config(
-    page_title="Prédiction du Trafic Urbain",
+    page_title="Trafic urbain Minneapolis",
     page_icon="🚗",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Style CSS personnalisé
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #2C3E50;
-        text-align: center;
-        padding: 1rem 0;
-    }
-    .metric-card {
-        background-color: #F8F9FA;
-        border-radius: 10px;
-        padding: 1rem;
-        border-left: 4px solid #3498DB;
-    }
-    .prediction-box {
-        background-color: #EBF5FB;
-        border-radius: 10px;
-        padding: 1.5rem;
-        text-align: center;
-        border: 2px solid #3498DB;
-    }
-    .good-pred  { border-color: #2ECC71; background-color: #EAFAF1; }
-    .mid-pred   { border-color: #F39C12; background-color: #FEF9E7; }
-    .high-pred  { border-color: #E74C3C; background-color: #FDEDEC; }
-</style>
-""", unsafe_allow_html=True)
+MONTH_LABELS = {
+    1: "Jan",
+    2: "Fev",
+    3: "Mar",
+    4: "Avr",
+    5: "Mai",
+    6: "Juin",
+    7: "Juil",
+    8: "Aout",
+    9: "Sep",
+    10: "Oct",
+    11: "Nov",
+    12: "Dec",
+}
+DAY_LABELS = {
+    0: "Lun",
+    1: "Mar",
+    2: "Mer",
+    3: "Jeu",
+    4: "Ven",
+    5: "Sam",
+    6: "Dim",
+}
+SCENARIOS = {
+    "Trajet domicile-travail": {
+        "hour": 8,
+        "temp_c": 12.0,
+        "rain": 0.0,
+        "snow": 0.0,
+        "cloud": 55.0,
+    },
+    "Nuit calme": {
+        "hour": 2,
+        "temp_c": 8.0,
+        "rain": 0.0,
+        "snow": 0.0,
+        "cloud": 15.0,
+    },
+    "Episode neigeux": {
+        "hour": 17,
+        "temp_c": -6.0,
+        "rain": 0.0,
+        "snow": 2.0,
+        "cloud": 90.0,
+    },
+    "Orage en pointe": {
+        "hour": 18,
+        "temp_c": 24.0,
+        "rain": 6.0,
+        "snow": 0.0,
+        "cloud": 98.0,
+    },
+}
 
-# ============================================
-# CHARGEMENT DES RESSOURCES
-# ============================================
+st.markdown(
+    """
+    <style>
+        .hero {
+            padding: 1.25rem 1.4rem;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #102542 0%, #1f4e79 55%, #f0a04b 100%);
+            color: white;
+            margin-bottom: 1rem;
+        }
+        .hero h1 {
+            margin: 0;
+            font-size: 2.6rem;
+        }
+        .hero p {
+            margin: 0.5rem 0 0 0;
+            font-size: 1rem;
+            max-width: 760px;
+        }
+        .insight-card {
+            border: 1px solid rgba(16, 37, 66, 0.12);
+            border-radius: 16px;
+            padding: 1rem;
+            background: #f8fafc;
+            min-height: 150px;
+        }
+        .prediction-box {
+            border-radius: 18px;
+            padding: 1.25rem 1.4rem;
+            color: #102542;
+            background: #eef4f8;
+            border-left: 8px solid #1f4e79;
+        }
+        .prediction-low {
+            background: #edf8f1;
+            border-left-color: #2b9348;
+        }
+        .prediction-mid {
+            background: #fff6e8;
+            border-left-color: #f8961e;
+        }
+        .prediction-high {
+            background: #fdeceb;
+            border-left-color: #d62828;
+        }
+        .small-note {
+            font-size: 0.92rem;
+            color: #4b5563;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 @st.cache_resource
-def charger_modele():
-    model  = joblib.load("models/xgboost_model.pkl")
-    scaler = joblib.load("models/scaler.pkl")
-    return model, scaler
+def load_assets():
+    model = joblib.load("models/xgboost_model.pkl")
+    feature_columns = joblib.load("models/feature_columns.pkl")
+    metrics = pd.read_json("models/metriques.json")
+    hyperparameters = pd.read_json("models/hyperparameters.json")
+    return model, feature_columns, metrics, hyperparameters
+
 
 @st.cache_data
-def charger_donnees():
-    df = pd.read_csv("data/data_raw.csv")
-    df.rename(
-    columns={
-        "rain_1h": "rain",
-        "snow_1h": "snow",
-        "clouds_all": "cloud",
-        "weather_main": "weather",
-        "traffic_volume": "traffic",
-        "date_time": "datetime"
-    }, inplace=True
+def load_data():
+    raw = pd.read_csv("data/data_raw.csv")
+    raw = raw.rename(
+        columns={
+            "rain_1h": "rain",
+            "snow_1h": "snow",
+            "clouds_all": "cloud",
+            "weather_main": "weather",
+            "traffic_volume": "traffic",
+            "date_time": "datetime",
+        }
     )
-    df["datetime"] = pd.to_datetime(df["datetime"])
-    return df
+    raw["datetime"] = pd.to_datetime(raw["datetime"])
+    raw["temp_c"] = raw["temp"] - 273.15
+    raw["weekday"] = raw["datetime"].dt.weekday
+    raw["month"] = raw["datetime"].dt.month
+    raw["hour"] = raw["datetime"].dt.hour
+    raw["day"] = raw["datetime"].dt.day
+
+    processed = pd.read_csv("data/data_processed.csv")
+    processed["datetime"] = pd.to_datetime(processed["datetime"])
+
+    predictions = pd.read_csv("data/predictions_test.csv")
+    predictions["datetime"] = pd.to_datetime(predictions["datetime"])
+    return raw, processed, predictions
+
+
+@st.cache_data
+def build_reference_tables(processed_df):
+    group_hour_weekday = (
+        processed_df.groupby(["month", "weekday", "hour"], dropna=False)
+        .median(numeric_only=True)
+        .reset_index()
+    )
+    group_hour = processed_df.groupby("hour", dropna=False).median(numeric_only=True).reset_index()
+    global_defaults = processed_df.median(numeric_only=True).to_dict()
+    return group_hour_weekday, group_hour, global_defaults
+
 
 @st.cache_resource
-def charger_explainer(model, X_sample):
-    explainer   = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(X_sample)
-    return explainer, shap_values
+def build_explainer(_model):
+    return shap.TreeExplainer(_model)
 
-model, scaler = charger_modele()
-df            = charger_donnees()
 
-# ============================================
-# SIDEBAR — NAVIGATION
-# ============================================
-st.sidebar.image("assets/logo.png", use_column_width=True)
-st.sidebar.markdown("---")
+def metric_value(metrics_df, model_name, split, metric):
+    return metrics_df.loc[split, model_name][metric]
 
-page = st.sidebar.radio(
-    "Navigation",
-    ["🏠 Accueil",
-     "📊 Exploration",
-     "🔮 Prédiction",
-     "🗺️ Carte",
-     "📈 Performance modèle"]
-)
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("**À propos**")
-st.sidebar.info(
-    "Application de prédiction du volume "
-    "de trafic sur l'Interstate 94 (Minneapolis). "
-    "Modèle : Random Forest | R² = 0.989"
-)
+def to_rain_category(value):
+    return int(value > 0)
 
-# ============================================
-# PAGE 1 — ACCUEIL
-# ============================================
-if page == "🏠 Accueil":
 
-    st.markdown('<p class="main-header">🚗 Prédiction du Trafic Urbain</p>',
-                unsafe_allow_html=True)
-    st.markdown("---")
+def to_snow_category(value):
+    return int(value > 0)
 
-    # KPIs globaux
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Observations", f"{len(df):,}", "Dataset complet")
-    with col2:
-        st.metric("R² Test", "0.989", "+9.5% vs Ridge")
-    with col3:
-        st.metric("RMSE Test", "210 véh.", "-66% vs Ridge")
-    with col4:
-        st.metric("MAPE Test", "5.8%", "-79% vs Ridge")
 
-    st.markdown("---")
+def lookup_reference_row(month, weekday, hour, tables):
+    group_hour_weekday, group_hour, global_defaults = tables
+    exact = group_hour_weekday[
+        (group_hour_weekday["month"] == month)
+        & (group_hour_weekday["weekday"] == weekday)
+        & (group_hour_weekday["hour"] == hour)
+    ]
+    if not exact.empty:
+        return exact.iloc[0].to_dict()
+    partial = group_hour[group_hour["hour"] == hour]
+    if not partial.empty:
+        return partial.iloc[0].to_dict()
+    return global_defaults
 
-    # Description du projet
-    col_left, col_right = st.columns([2, 1])
-    with col_left:
-        st.subheader("📋 Objectif du projet")
-        st.write("""
-        Cette application prédit le volume horaire de trafic
-        sur l'Interstate 94 en fonction des conditions météorologiques
-        et temporelles. Elle permet de :
-        - **Explorer** les patterns historiques du trafic
-        - **Prédire** le volume pour des conditions données
-        - **Comprendre** les facteurs influençant le trafic (SHAP)
-        - **Visualiser** la distribution spatiale du trafic
-        """)
 
-    with col_right:
-        st.subheader("🏆 Comparaison des modèles")
-        df_comp = pd.DataFrame({
-            "Modèle" : ["Ridge", "Random Forest", "XGBoost"],
-            "R² Test": [0.903, 0.989, 0.988],
-            "RMSE"   : [618, 210, 213]
-        })
-        fig_comp = px.bar(
-            df_comp, x="Modèle", y="R² Test",
-            color="Modèle",
-            color_discrete_sequence=["#AED6F1","#2ECC71","#F39C12"],
-            text="R² Test"
-        )
-        fig_comp.update_traces(textposition="outside")
-        fig_comp.update_layout(
-            showlegend=False,
-            yaxis_range=[0.8, 1.0],
-            height=300
-        )
-        st.plotly_chart(fig_comp, use_container_width=True)
+def build_feature_row(target_dt, inputs, feature_columns, reference_tables):
+    month = target_dt.month
+    weekday = target_dt.weekday()
+    hour = target_dt.hour
+    day = target_dt.day
+    base = lookup_reference_row(month, weekday, hour, reference_tables)
 
-    # Aperçu temporel
-    st.subheader("📅 Évolution historique du trafic")
-    df_daily = df.groupby(
-        df["datetime"].dt.date
-    )["traffic"].mean().reset_index()
-    df_daily.columns = ["date", "trafic_moyen"]
-
-    fig_hist = px.line(
-        df_daily, x="date", y="trafic_moyen",
-        title="Trafic moyen journalier — 2016 à 2018",
-        labels={"trafic_moyen": "Trafic moyen (véh/h)",
-                "date": "Date"},
-        color_discrete_sequence=["#3498DB"]
+    features = {column: float(base.get(column, 0.0)) for column in feature_columns}
+    features.update(
+        {
+            "rain": float(inputs["rain"]),
+            "snow": float(inputs["snow"]),
+            "cloud": float(inputs["cloud"]),
+            "hour": float(hour),
+            "day": float(day),
+            "weekday": float(weekday),
+            "month": float(month),
+            "year": float(target_dt.year),
+            "is_holiday": float(inputs["is_holiday"]),
+            "is_rush_hour": float(hour in {7, 8, 9, 16, 17, 18, 19}),
+            "is_weekend": float(weekday >= 5),
+            "temp_c": float(inputs["temp_c"]),
+            "rain_cat": float(to_rain_category(inputs["rain"])),
+            "snow_cat": float(to_snow_category(inputs["snow"])),
+            "hour_sin": float(np.sin(2 * np.pi * hour / 24)),
+            "hour_cos": float(np.cos(2 * np.pi * hour / 24)),
+            "day_sin": float(np.sin(2 * np.pi * weekday / 7)),
+            "day_cos": float(np.cos(2 * np.pi * weekday / 7)),
+            "month_sin": float(np.sin(2 * np.pi * month / 12)),
+            "month_cos": float(np.cos(2 * np.pi * month / 12)),
+            "traffic_lag_1": float(inputs["traffic_lag_1"]),
+            "traffic_lag_2": float(inputs["traffic_lag_2"]),
+            "traffic_lag_3": float(inputs["traffic_lag_3"]),
+            "traffic_lag_24": float(inputs["traffic_lag_24"]),
+        }
     )
-    fig_hist.update_layout(height=350)
-    st.plotly_chart(fig_hist, use_container_width=True)
 
-# ============================================
-# PAGE 2 — EXPLORATION
-# ============================================
-elif page == "📊 Exploration":
+    for column in ["rain", "snow", "temp_c", "cloud"]:
+        current_value = features[column]
+        for lag in [1, 2, 3, 24]:
+            lag_name = f"{column}_lag_{lag}"
+            if lag_name in features:
+                features[lag_name] = current_value
 
-    st.title("📊 Exploration des données")
-    st.markdown("---")
+    for window in [3, 6, 24]:
+        for column in ["rain", "snow", "temp_c", "cloud"]:
+            mean_name = f"{column}_mean_{window}"
+            if mean_name in features:
+                features[mean_name] = features[column]
 
-    # Filtres
+    return pd.DataFrame([[features[column] for column in feature_columns]], columns=feature_columns)
+
+
+def classify_prediction(value):
+    if value < 1500:
+        return "Faible", "prediction-low"
+    if value < 3500:
+        return "Modere", "prediction-mid"
+    return "Eleve", "prediction-high"
+
+
+def make_24h_profile(base_dt, inputs, feature_columns, tables, model):
+    rows = []
+    for hour in range(24):
+        target_dt = datetime.combine(base_dt.date(), datetime.min.time()).replace(
+            year=base_dt.year,
+            month=base_dt.month,
+            day=base_dt.day,
+            hour=hour,
+        )
+        row = build_feature_row(target_dt, inputs, feature_columns, tables)
+        pred = max(0, float(model.predict(row)[0]))
+        rows.append({"heure": hour, "prediction": round(pred)})
+    return pd.DataFrame(rows)
+
+
+model, feature_columns, metrics_df, hyperparameters_df = load_assets()
+raw_df, processed_df, predictions_df = load_data()
+reference_tables = build_reference_tables(processed_df)
+
+st.sidebar.image("assets/logo.png", use_container_width=True)
+st.sidebar.markdown("### Navigation")
+page = st.sidebar.radio(
+    "Aller a",
+    ["Vue d'ensemble", "Exploration", "Prediction", "Performance"],
+    label_visibility="collapsed",
+)
+
+st.sidebar.markdown("---")
+st.sidebar.caption("Projet notebook -> pipeline ML -> application Streamlit")
+st.sidebar.info(
+    "Modele deploye : XGBoost\n\n"
+    f"R2 test: {metric_value(metrics_df, 'XGBoost', 'test', 'R2'):.3f}\n\n"
+    f"RMSE test: {metric_value(metrics_df, 'XGBoost', 'test', 'RMSE'):.0f}"
+)
+
+if page == "Vue d'ensemble":
+    st.markdown(
+        """
+        <div class="hero">
+            <h1>Prediction du trafic urbain</h1>
+            <p>Application construite a partir du notebook d'analyse du trafic de l'Interstate 94 a Minneapolis, avec exploration, prediction et lecture des performances du modele final.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Observations", f"{len(raw_df):,}".replace(",", " "))
+    col2.metric("Periode", f"{raw_df['datetime'].dt.year.min()}-{raw_df['datetime'].dt.year.max()}")
+    col3.metric("R2 test XGBoost", f"{metric_value(metrics_df, 'XGBoost', 'test', 'R2'):.3f}")
+    col4.metric("RMSE test XGBoost", f"{metric_value(metrics_df, 'XGBoost', 'test', 'RMSE'):.0f} veh/h")
+
+    left, right = st.columns([1.5, 1])
+    with left:
+        st.subheader("Lecture rapide du projet")
+        st.write(
+            "Le notebook suit une progression complete: exploration des donnees, feature engineering temporel et meteorologique, construction des lags et moyennes mobiles, puis comparaison Ridge / Random Forest / XGBoost."
+        )
+        st.write(
+            "Le modele final sauvegarde dans l'application est XGBoost. L'app a ete alignee sur les vraies features du pipeline afin que la prediction utilise bien les colonnes attendues par le modele."
+        )
+    with right:
+        comparison = pd.DataFrame(
+            {
+                "Modele": ["Ridge", "Random Forest", "XGBoost"],
+                "R2 test": [
+                    metric_value(metrics_df, "Ridge", "test", "R2"),
+                    metric_value(metrics_df, "Random_Forest", "test", "R2"),
+                    metric_value(metrics_df, "XGBoost", "test", "R2"),
+                ],
+                "RMSE test": [
+                    metric_value(metrics_df, "Ridge", "test", "RMSE"),
+                    metric_value(metrics_df, "Random_Forest", "test", "RMSE"),
+                    metric_value(metrics_df, "XGBoost", "test", "RMSE"),
+                ],
+            }
+        )
+        fig = px.bar(
+            comparison,
+            x="Modele",
+            y="R2 test",
+            color="Modele",
+            color_discrete_sequence=["#9ec5fe", "#52b788", "#f4a261"],
+            text="R2 test",
+        )
+        fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+        fig.update_layout(height=320, showlegend=False, yaxis_range=[0.85, 1.01])
+        st.plotly_chart(fig, use_container_width=True)
+
+    daily = raw_df.groupby(raw_df["datetime"].dt.date)["traffic"].mean().reset_index()
+    daily.columns = ["date", "traffic_mean"]
+    fig_daily = px.line(
+        daily,
+        x="date",
+        y="traffic_mean",
+        color_discrete_sequence=["#1f4e79"],
+        title="Evolution du trafic moyen journalier",
+    )
+    fig_daily.update_layout(height=360)
+    st.plotly_chart(fig_daily, use_container_width=True)
+
+    a, b, c = st.columns(3)
+    a.markdown(
+        """
+        <div class="insight-card">
+            <h4>Ce que montre le notebook</h4>
+            <p>Les effets temporels dominent: heures de pointe, jours de semaine et saisonnalite structurent l'essentiel du signal.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    b.markdown(
+        """
+        <div class="insight-card">
+            <h4>Ce qui compte pour le modele</h4>
+            <p>Les lags trafic, les transformations cycliques et les variables meteorologiques enrichies portent la prediction.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    c.markdown(
+        """
+        <div class="insight-card">
+            <h4>Ce qui a ete ameliore</h4>
+            <p>Encodage nettoye, navigation clarifiee, prediction alignee sur 52 features, resume des performances et saisie plus guidee.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+elif page == "Exploration":
+    st.title("Exploration des donnees")
     col1, col2, col3 = st.columns(3)
     with col1:
-        annee = st.selectbox(
-            "Année",
-            sorted(df["datetime"].dt.year.unique())
-        )
+        year = st.selectbox("Annee", sorted(raw_df["datetime"].dt.year.unique()), index=3)
     with col2:
-        mois = st.selectbox(
-            "Mois",
-            range(1, 13),
-            format_func=lambda x: [
-                "Jan","Fév","Mar","Avr","Mai","Jun",
-                "Jul","Aoû","Sep","Oct","Nov","Déc"
-            ][x-1]
-        )
+        month = st.selectbox("Mois", list(MONTH_LABELS.keys()), format_func=lambda m: MONTH_LABELS[m], index=6)
     with col3:
-        variable = st.selectbox(
-            "Variable météo",
-            ["temp", "rain_1h", "snow_1h", "clouds_all"]
-        )
+        variable = st.selectbox("Variable meteo", ["temp_c", "rain", "snow", "cloud"])
 
-    df_filtre = df[
-        (df["datetime"].dt.year  == annee) &
-        (df["datetime"].dt.month == mois)
-    ]
+    filtered = raw_df[(raw_df["datetime"].dt.year == year) & (raw_df["datetime"].dt.month == month)]
+    if filtered.empty:
+        st.warning("Aucune donnee disponible pour cette selection.")
+    elif "traffic" not in filtered.columns:
+        st.error("La colonne 'traffic' est introuvable dans les donnees chargees. Rechargez l'application pour vider le cache Streamlit.")
+    else:
+        left, right = st.columns(2)
+        hourly = filtered.groupby("hour")["traffic"].mean().reset_index()
+        day_profile = filtered.groupby("weekday")["traffic"].mean().reset_index()
+        day_profile["jour"] = day_profile["weekday"].map(DAY_LABELS)
 
-    # Graphiques exploration
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        # Trafic par heure
-        trafic_heure = df_filtre.groupby(
-            df_filtre["datetime"].dt.hour
-        )["traffic"].mean().reset_index()
-        trafic_heure.columns = ["heure", "trafic"]
-
-        fig_heure = px.line(
-            trafic_heure, x="heure", y="trafic",
-            title="Profil horaire moyen",
-            markers=True,
-            color_discrete_sequence=["#3498DB"]
-        )
-        fig_heure.add_vrect(
-            x0=7, x1=9,
-            fillcolor="orange", opacity=0.2,
-            annotation_text="Pointe matin"
-        )
-        fig_heure.add_vrect(
-            x0=16, x1=19,
-            fillcolor="green", opacity=0.2,
-            annotation_text="Pointe soir"
-        )
-        st.plotly_chart(fig_heure, use_container_width=True)
-
-    with col_b:
-        # Trafic par jour de semaine
-        jours = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"]
-        trafic_jour = df_filtre.groupby(
-            df_filtre["datetime"].dt.dayofweek
-        )["traffic"].mean().reset_index()
-        trafic_jour.columns = ["jour", "trafic"]
-        trafic_jour["jour_nom"] = trafic_jour["jour"].map(
-            dict(enumerate(jours))
-        )
-
-        fig_jour = px.bar(
-            trafic_jour, x="jour_nom", y="trafic",
-            title="Trafic moyen par jour",
-            color="trafic",
-            color_continuous_scale="Blues"
-        )
-        st.plotly_chart(fig_jour, use_container_width=True)
-
-    # Corrélation météo × trafic
-    st.subheader(f"🌡️ Relation {variable} × trafic")
-    fig_corr = px.scatter(
-        df_filtre.sample(min(2000, len(df_filtre))),
-        x=variable, y="traffic",
-        opacity=0.3,
-        trendline="ols",
-        title=f"Relation {variable} vs trafic",
-        color_discrete_sequence=["#3498DB"]
-    )
-    st.plotly_chart(fig_corr, use_container_width=True)
-
-    # Heatmap heure × jour
-    st.subheader("🔥 Heatmap trafic — Heure × Jour")
-    pivot = df_filtre.pivot_table(
-        values="traffic",
-        index=df_filtre["datetime"].dt.hour,
-        columns=df_filtre["datetime"].dt.dayofweek,
-        aggfunc="mean"
-    )
-    pivot.columns = jours
-
-    fig_heat = px.imshow(
-        pivot,
-        title="Volume de trafic moyen — Heure × Jour",
-        labels={"x": "Jour", "y": "Heure",
-                "color": "Trafic moyen"},
-        color_continuous_scale="RdYlGn_r",
-        aspect="auto"
-    )
-    st.plotly_chart(fig_heat, use_container_width=True)
-
-# ============================================
-# PAGE 3 — PRÉDICTION
-# ============================================
-elif page == "🔮 Prédiction":
-
-    st.title("🔮 Prédiction du volume de trafic")
-    st.markdown("---")
-
-    col_inputs, col_result = st.columns([1, 1])
-
-    with col_inputs:
-        st.subheader("⚙️ Paramètres de prédiction")
-
-        # Paramètres temporels
-        st.markdown("**📅 Paramètres temporels**")
-        date_pred = st.date_input(
-            "Date",
-            value=datetime(2018, 7, 3)
-        )
-        heure_pred = st.slider(
-            "Heure de la journée",
-            0, 23, 8,
-            format="%dh"
-        )
-
-        st.markdown("**🌤️ Conditions météo**")
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            temp   = st.slider("Température (°C)", -20, 40, 20)
-            pluie  = st.slider("Pluie (mm)",         0, 60,  0)
-        with col_m2:
-            neige  = st.slider("Neige (mm)",          0, 30,  0)
-            nuages = st.slider("Nuages (%)",           0,100, 40)
-
-        weather = st.selectbox(
-            "Conditions météo",
-            ["Clear", "Clouds", "Rain",
-             "Snow", "Mist", "Thunderstorm"]
-        )
-
-        trafic_lag_1  = st.number_input(
-            "Trafic heure précédente (lag_1)",
-            0, 7500, 3000
-        )
-        trafic_lag_24 = st.number_input(
-            "Trafic même heure hier (lag_24)",
-            0, 7500, 3200
-        )
-
-        predict_btn = st.button(
-            "🚀 Lancer la prédiction",
-            use_container_width=True
-        )
-
-    with col_result:
-        st.subheader("📊 Résultats")
-
-        if predict_btn:
-            # Construction du vecteur de features
-            dt = datetime.combine(date_pred,
-                                   datetime.min.time()) + \
-                 timedelta(hours=heure_pred)
-
-            features = {
-                "hour"            : heure_pred,
-                "temp_c"          : temp,
-                "rain"            : pluie,
-                "snow"            : neige,
-                "cloud"           : nuages,
-                "hour_sin"        : np.sin(2*np.pi*heure_pred/24),
-                "hour_cos"        : np.cos(2*np.pi*heure_pred/24),
-                "day_sin"         : np.sin(2*np.pi*dt.weekday()/7),
-                "day_cos"         : np.cos(2*np.pi*dt.weekday()/7),
-                "month_sin"       : np.sin(2*np.pi*dt.month/12),
-                "month_cos"       : np.cos(2*np.pi*dt.month/12),
-                "traffic_lag_1"   : trafic_lag_1,
-                "traffic_lag_24"  : trafic_lag_24,
-                "is_rush_hour"    : 1 if heure_pred in range(7,10) or
-                                        heure_pred in range(16,20)
-                                    else 0,
-                "is_weekend"      : 1 if dt.weekday() >= 5 else 0,
-                "weekday"         : dt.weekday(),
-                "weather_cat_Rain": 1 if weather=="Rain" else 0,
-                "weather_cat_Clouds":1 if weather=="Clouds" else 0,
-                "weather_cat_bad" : 1 if weather in
-                                    ["Snow","Thunderstorm","Fog"]
-                                    else 0,
-            }
-
-            X_pred = pd.DataFrame([features])
-
-            # Prédiction
-            prediction = model.predict(X_pred)[0]
-            prediction = max(0, round(prediction))
-
-            # Niveau de trafic
-            if prediction < 1500:
-                niveau = "Faible"
-                couleur = "good-pred"
-                emoji  = "🟢"
-            elif prediction < 3500:
-                niveau = "Modéré"
-                couleur = "mid-pred"
-                emoji  = "🟡"
-            else:
-                niveau = "Élevé"
-                couleur = "high-pred"
-                emoji  = "🔴"
-
-            # Affichage résultat
-            st.markdown(f"""
-            <div class="prediction-box {couleur}">
-                <h1>{emoji} {prediction:,} véhicules/heure</h1>
-                <h3>Niveau de trafic : {niveau}</h3>
-                <p>📅 {dt.strftime('%A %d %B %Y à %Hh00')}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown("---")
-
-            # Jauge de trafic
-            fig_gauge = go.Figure(go.Indicator(
-                mode  = "gauge+number+delta",
-                value = prediction,
-                title = {"text": "Volume prédit (véh/h)"},
-                delta = {"reference": 3200,
-                         "label": "vs moyenne"},
-                gauge = {
-                    "axis" : {"range": [0, 7500]},
-                    "bar"  : {"color": "#3498DB"},
-                    "steps": [
-                        {"range": [0,    1500],
-                         "color": "#EAFAF1"},
-                        {"range": [1500, 3500],
-                         "color": "#FEF9E7"},
-                        {"range": [3500, 7500],
-                         "color": "#FDEDEC"}
-                    ],
-                    "threshold": {
-                        "line" : {"color": "red", "width": 4},
-                        "value": 5000
-                    }
-                }
-            ))
-            fig_gauge.update_layout(height=300)
-            st.plotly_chart(fig_gauge, use_container_width=True)
-
-            # SHAP local
-            st.subheader("🔍 Explication SHAP")
-            explainer = shap.TreeExplainer(model)
-            shap_vals = explainer.shap_values(X_pred)
-
-            fig_shap, ax = plt.subplots(figsize=(10, 4))
-            shap.waterfall_plot(
-                shap.Explanation(
-                    values        = shap_vals[0],
-                    base_values   = explainer.expected_value,
-                    data          = X_pred.iloc[0],
-                    feature_names = X_pred.columns.tolist()
-                ),
-                show=False
-            )
-            st.pyplot(fig_shap)
-
-            # Profil horaire simulé
-            st.subheader("📈 Prédictions sur 24h")
-            predictions_24h = []
-            for h in range(24):
-                f = features.copy()
-                f["hour"]     = h
-                f["hour_sin"] = np.sin(2*np.pi*h/24)
-                f["hour_cos"] = np.cos(2*np.pi*h/24)
-                f["is_rush_hour"] = 1 if h in range(7,10) or \
-                                         h in range(16,20) else 0
-                pred = max(0, model.predict(
-                    pd.DataFrame([f]))[0])
-                predictions_24h.append(
-                    {"heure": h, "prediction": pred}
-                )
-
-            df_24h = pd.DataFrame(predictions_24h)
-            fig_24h = px.line(
-                df_24h, x="heure", y="prediction",
-                title="Profil de trafic prédit sur 24h",
+        with left:
+            fig_hour = px.line(
+                hourly,
+                x="hour",
+                y="traffic",
                 markers=True,
-                color_discrete_sequence=["#E74C3C"]
+                color_discrete_sequence=["#1f4e79"],
+                title="Profil horaire moyen",
             )
-            fig_24h.add_vline(
-                x=heure_pred,
-                line_dash="dash",
-                line_color="blue",
-                annotation_text=f"Heure sélectionnée ({heure_pred}h)"
+            fig_hour.add_vrect(x0=7, x1=9, fillcolor="#f4a261", opacity=0.18, line_width=0)
+            fig_hour.add_vrect(x0=16, x1=19, fillcolor="#2a9d8f", opacity=0.15, line_width=0)
+            st.plotly_chart(fig_hour, use_container_width=True)
+
+        with right:
+            fig_days = px.bar(
+                day_profile,
+                x="jour",
+                y="traffic",
+                color="traffic",
+                color_continuous_scale="Blues",
+                title="Trafic moyen par jour",
             )
-            fig_24h.add_vrect(
-                x0=7, x1=9,
-                fillcolor="orange", opacity=0.15
-            )
-            fig_24h.add_vrect(
-                x0=16, x1=19,
-                fillcolor="green", opacity=0.15
-            )
-            st.plotly_chart(fig_24h, use_container_width=True)
+            st.plotly_chart(fig_days, use_container_width=True)
 
-        else:
-            st.info(
-                "👈 Configurez les paramètres et cliquez sur "
-                "'Lancer la prédiction'"
-            )
-
-# ============================================
-# PAGE 4 — CARTE
-# ============================================
-elif page == "🗺️ Carte":
-
-    st.title("🗺️ Visualisation géographique")
-    st.markdown("---")
-    st.info(
-        "Localisation : Interstate 94, Minneapolis, Minnesota, USA"
-    )
-
-    # Carte de base avec Plotly
-    fig_map = go.Figure(go.Scattermapbox(
-        lat  = [44.9778],
-        lon  = [-93.2650],
-        mode = "markers+text",
-        marker = go.scattermapbox.Marker(
-            size  = 20,
-            color = "#E74C3C"
-        ),
-        text      = ["Interstate 94 — Station de mesure"],
-        textposition = "top right"
-    ))
-
-    fig_map.update_layout(
-        mapbox = dict(
-            style  = "open-street-map",
-            center = dict(lat=44.9778, lon=-93.2650),
-            zoom   = 11
-        ),
-        height = 500,
-        margin = {"r":0,"t":0,"l":0,"b":0}
-    )
-    st.plotly_chart(fig_map, use_container_width=True)
-
-    # Distribution horaire par zone
-    st.subheader("📊 Distribution du trafic par période")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        trafic_saison = df.groupby(
-            df["datetime"].dt.month
-        )["traffic"].mean().reset_index()
-        trafic_saison.columns = ["mois", "trafic"]
-        mois_labels = ["Jan","Fév","Mar","Avr","Mai","Jun",
-                       "Jul","Aoû","Sep","Oct","Nov","Déc"]
-        trafic_saison["mois_nom"] = trafic_saison["mois"].map(
-            dict(enumerate(mois_labels, 1))
-        )
-        fig_s = px.bar(
-            trafic_saison,
-            x="mois_nom", y="trafic",
-            title="Trafic moyen par mois",
-            color="trafic",
-            color_continuous_scale="Blues"
-        )
-        st.plotly_chart(fig_s, use_container_width=True)
-
-    with col2:
-        fig_box = px.box(
-            df.assign(
-                heure=df["datetime"].dt.hour
-            ).sample(5000),
-            x="heure",
+        sample_size = min(2000, len(filtered))
+        fig_scatter = px.scatter(
+            filtered.sample(sample_size, random_state=42),
+            x=variable,
             y="traffic",
-            title="Distribution du trafic par heure",
-            color_discrete_sequence=["#3498DB"]
+            opacity=0.35,
+            trendline="ols",
+            color_discrete_sequence=["#f4a261"],
+            title=f"Relation {variable} vs trafic",
         )
-        st.plotly_chart(fig_box, use_container_width=True)
+        st.plotly_chart(fig_scatter, use_container_width=True)
 
-# ============================================
-# PAGE 5 — PERFORMANCE MODÈLE
-# ============================================
-elif page == "📈 Performance modèle":
+        heat = filtered.pivot_table(
+            values="traffic",
+            index="hour",
+            columns="weekday",
+            aggfunc="mean",
+        )
+        heat = heat.rename(columns=DAY_LABELS)
+        fig_heat = px.imshow(
+            heat,
+            aspect="auto",
+            color_continuous_scale="YlOrRd",
+            title="Heatmap trafic moyen par heure et jour",
+            labels={"x": "Jour", "y": "Heure", "color": "Trafic moyen"},
+        )
+        st.plotly_chart(fig_heat, use_container_width=True)
 
-    st.title("📈 Performance des modèles")
-    st.markdown("---")
+        st.caption(
+            "Lecture projet: le notebook confirme une structure tres forte autour des heures de pointe et des jours ouvres, tandis que la meteo agit surtout comme facteur modulant."
+        )
 
-    # Tableau comparatif
-    st.subheader("🏆 Comparaison des modèles")
-    df_perf = pd.DataFrame({
-        "Modèle"    : ["Ridge", "Random Forest", "XGBoost"],
-        "R² Train"  : [0.823, 0.997, 0.996],
-        "R² Val"    : [0.891, 0.982, 0.981],
-        "R² Test"   : [0.903, 0.989, 0.988],
-        "RMSE Test" : [618,   210,   213],
-        "MAE Test"  : [434,   135,   138],
-        "MAPE Test" : ["28.0%", "5.8%", "5.9%"]
-    })
-    st.dataframe(
-        df_perf.style.highlight_max(
-            subset=["R² Test"],
-            color="#EAFAF1"
-        ).highlight_min(
-            subset=["RMSE Test", "MAE Test"],
-            color="#EAFAF1"
-        ),
-        use_container_width=True
+elif page == "Prediction":
+    st.title("Prediction du volume de trafic")
+
+    default_scenario = st.selectbox("Scenario de depart", list(SCENARIOS.keys()))
+    scenario = SCENARIOS[default_scenario]
+
+    col_inputs, col_output = st.columns([1, 1.2])
+    with col_inputs:
+        target_date = st.date_input("Date", value=date(2018, 7, 3))
+        hour = st.slider("Heure", 0, 23, int(scenario["hour"]))
+
+        c1, c2 = st.columns(2)
+        with c1:
+            temp_c = st.slider("Temperature (C)", -25.0, 40.0, float(scenario["temp_c"]), 0.5)
+            rain = st.slider("Pluie sur 1h (mm)", 0.0, 20.0, float(scenario["rain"]), 0.1)
+            traffic_lag_1 = st.number_input("Trafic heure precedente", 0, 8000, 2800, 50)
+            traffic_lag_2 = st.number_input("Trafic il y a 2h", 0, 8000, 2600, 50)
+        with c2:
+            snow = st.slider("Neige sur 1h (mm)", 0.0, 10.0, float(scenario["snow"]), 0.1)
+            cloud = st.slider("Nuages (%)", 0.0, 100.0, float(scenario["cloud"]), 1.0)
+            traffic_lag_3 = st.number_input("Trafic il y a 3h", 0, 8000, 2400, 50)
+            traffic_lag_24 = st.number_input("Trafic meme heure hier", 0, 8000, 3000, 50)
+
+        is_holiday = st.toggle("Jour ferie", value=False)
+
+        user_inputs = {
+            "temp_c": temp_c,
+            "rain": rain,
+            "snow": snow,
+            "cloud": cloud,
+            "traffic_lag_1": traffic_lag_1,
+            "traffic_lag_2": traffic_lag_2,
+            "traffic_lag_3": traffic_lag_3,
+            "traffic_lag_24": traffic_lag_24,
+            "is_holiday": int(is_holiday),
+        }
+        target_dt = datetime.combine(target_date, datetime.min.time()).replace(hour=hour)
+        feature_row = build_feature_row(target_dt, user_inputs, feature_columns, reference_tables)
+        prediction = max(0, float(model.predict(feature_row)[0]))
+
+    with col_output:
+        level, css_class = classify_prediction(prediction)
+        st.markdown(
+            f"""
+            <div class="prediction-box {css_class}">
+                <h2 style="margin:0;">{prediction:,.0f} vehicules / heure</h2>
+                <p style="margin:0.4rem 0 0 0;"><strong>Niveau estime:</strong> {level}</p>
+                <p style="margin:0.4rem 0 0 0;">{target_dt.strftime('%Y-%m-%d a %Hh00')}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        avg_reference = float(processed_df["traffic"].mean())
+        gauge = go.Figure(
+            go.Indicator(
+                mode="gauge+number+delta",
+                value=prediction,
+                delta={"reference": avg_reference},
+                gauge={
+                    "axis": {"range": [0, 8000]},
+                    "bar": {"color": "#1f4e79"},
+                    "steps": [
+                        {"range": [0, 1500], "color": "#edf8f1"},
+                        {"range": [1500, 3500], "color": "#fff6e8"},
+                        {"range": [3500, 8000], "color": "#fdeceb"},
+                    ],
+                },
+                title={"text": "Volume predit"},
+            )
+        )
+        gauge.update_layout(height=310, margin=dict(l=10, r=10, t=50, b=10))
+        st.plotly_chart(gauge, use_container_width=True)
+
+        st.markdown(
+            "<p class='small-note'>Les variables de retard et moyennes mobiles non saisies manuellement sont completees a partir des profils historiques du jeu de donnees traite pour rester compatibles avec les 52 features du modele.</p>",
+            unsafe_allow_html=True,
+        )
+
+    profile_24h = make_24h_profile(target_dt, user_inputs, feature_columns, reference_tables, model)
+    fig_profile = px.line(
+        profile_24h,
+        x="heure",
+        y="prediction",
+        markers=True,
+        color_discrete_sequence=["#d62828"],
+        title="Simulation sur 24 heures pour la meme journee",
     )
+    fig_profile.add_vline(x=hour, line_dash="dash", line_color="#1f4e79")
+    fig_profile.add_vrect(x0=7, x1=9, fillcolor="#f4a261", opacity=0.15, line_width=0)
+    fig_profile.add_vrect(x0=16, x1=19, fillcolor="#2a9d8f", opacity=0.14, line_width=0)
+    st.plotly_chart(fig_profile, use_container_width=True)
 
-    # Graphiques performance
+    with st.expander("Voir les principales contributions SHAP"):
+        explainer = build_explainer(model)
+        shap_values = explainer(feature_row)
+        contribution_df = (
+            pd.DataFrame(
+                {
+                    "Feature": feature_columns,
+                    "Contribution": shap_values.values[0],
+                    "Valeur": feature_row.iloc[0].values,
+                }
+            )
+            .assign(abs_value=lambda d: d["Contribution"].abs())
+            .sort_values("abs_value", ascending=False)
+            .head(10)
+        )
+        fig_imp = px.bar(
+            contribution_df.sort_values("Contribution"),
+            x="Contribution",
+            y="Feature",
+            orientation="h",
+            color="Contribution",
+            color_continuous_scale=["#d62828", "#f8f9fa", "#2a9d8f"],
+            title="Top 10 des contributions locales",
+        )
+        st.plotly_chart(fig_imp, use_container_width=True)
+
+        fig, _ = plt.subplots(figsize=(10, 4.5))
+        shap.plots.waterfall(shap_values[0], max_display=10, show=False)
+        st.pyplot(fig, clear_figure=True)
+
+elif page == "Performance":
+    st.title("Performance et validation du modele")
+
+    comparison = pd.DataFrame(
+        [
+            {
+                "Modele": "Ridge",
+                "R2 train": metric_value(metrics_df, "Ridge", "train", "R2"),
+                "R2 val": metric_value(metrics_df, "Ridge", "val", "R2"),
+                "R2 test": metric_value(metrics_df, "Ridge", "test", "R2"),
+                "RMSE test": metric_value(metrics_df, "Ridge", "test", "RMSE"),
+                "MAE test": metric_value(metrics_df, "Ridge", "test", "MAE"),
+                "MAPE test": metric_value(metrics_df, "Ridge", "test", "MAPE"),
+            },
+            {
+                "Modele": "Random Forest",
+                "R2 train": metric_value(metrics_df, "Random_Forest", "train", "R2"),
+                "R2 val": metric_value(metrics_df, "Random_Forest", "val", "R2"),
+                "R2 test": metric_value(metrics_df, "Random_Forest", "test", "R2"),
+                "RMSE test": metric_value(metrics_df, "Random_Forest", "test", "RMSE"),
+                "MAE test": metric_value(metrics_df, "Random_Forest", "test", "MAE"),
+                "MAPE test": metric_value(metrics_df, "Random_Forest", "test", "MAPE"),
+            },
+            {
+                "Modele": "XGBoost",
+                "R2 train": metric_value(metrics_df, "XGBoost", "train", "R2"),
+                "R2 val": metric_value(metrics_df, "XGBoost", "val", "R2"),
+                "R2 test": metric_value(metrics_df, "XGBoost", "test", "R2"),
+                "RMSE test": metric_value(metrics_df, "XGBoost", "test", "RMSE"),
+                "MAE test": metric_value(metrics_df, "XGBoost", "test", "MAE"),
+                "MAPE test": metric_value(metrics_df, "XGBoost", "test", "MAPE"),
+            },
+        ]
+    )
+    st.dataframe(comparison, use_container_width=True, hide_index=True)
+
     col1, col2 = st.columns(2)
     with col1:
         fig_r2 = px.bar(
-            df_perf, x="Modèle", y="R² Test",
-            title="R² Test par modèle",
-            color="Modèle",
-            color_discrete_sequence=[
-                "#AED6F1","#2ECC71","#F39C12"
-            ],
-            text="R² Test"
+            comparison,
+            x="Modele",
+            y="R2 test",
+            color="Modele",
+            text="R2 test",
+            color_discrete_sequence=["#9ec5fe", "#52b788", "#f4a261"],
+            title="Comparaison du R2 test",
         )
-        fig_r2.update_traces(textposition="outside")
-        fig_r2.update_layout(yaxis_range=[0.85, 1.0])
+        fig_r2.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+        fig_r2.update_layout(yaxis_range=[0.85, 1.01], showlegend=False)
         st.plotly_chart(fig_r2, use_container_width=True)
-
     with col2:
         fig_rmse = px.bar(
-            df_perf, x="Modèle", y="RMSE Test",
-            title="RMSE Test par modèle (↓ meilleur)",
-            color="Modèle",
-            color_discrete_sequence=[
-                "#AED6F1","#2ECC71","#F39C12"
-            ],
-            text="RMSE Test"
+            comparison,
+            x="Modele",
+            y="RMSE test",
+            color="Modele",
+            text="RMSE test",
+            color_discrete_sequence=["#9ec5fe", "#52b788", "#f4a261"],
+            title="Comparaison du RMSE test",
         )
         fig_rmse.update_traces(textposition="outside")
+        fig_rmse.update_layout(showlegend=False)
         st.plotly_chart(fig_rmse, use_container_width=True)
+
+    pred_chart = predictions_df.copy()
+    pred_chart["Erreur absolue XGBoost"] = (pred_chart["traffic"] - pred_chart["pred_xgb"]).abs()
+    fig_pred = go.Figure()
+    fig_pred.add_trace(go.Scatter(x=pred_chart["datetime"], y=pred_chart["traffic"], mode="lines", name="Reel", line=dict(color="#102542")))
+    fig_pred.add_trace(go.Scatter(x=pred_chart["datetime"], y=pred_chart["pred_xgb"], mode="lines", name="Predit XGBoost", line=dict(color="#d62828")))
+    fig_pred.update_layout(title="Extrait des predictions de test", height=360)
+    st.plotly_chart(fig_pred, use_container_width=True)
+
+    with st.expander("Hyperparametres sauvegardes"):
+        st.json(hyperparameters_df.to_dict())
