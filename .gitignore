@@ -1,4 +1,4 @@
 mlenv/
 models/*.pkl
 models/*.joblib
-models/*.h5
+models/*.h5models/*.pkl
