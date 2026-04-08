@@ -647,7 +647,7 @@ button[data-baseweb="tab"][aria-selected="true"] {{
 .sh {{
     border-bottom: 2px solid {BLEU};
     padding-bottom: 8px; margin: 28px 0 14px;
-    font-size: 2.15rem; font-weight: 700;
+    font-size: 1.5rem; font-weight: 700;
     color: var(--sh-text);
     transition: color .3s;
 }}
@@ -665,6 +665,7 @@ button[data-baseweb="tab"][aria-selected="true"] {{
 .box.g {{ background: var(--box-green-bg); border-color: {VERT}; color: var(--box-green-text); }}
 .box.o {{ background: var(--box-orange-bg); border-color: {ORANGE}; color: var(--box-orange-text); }}
 .box.r {{ background: var(--box-red-bg); border-color: {ROUGE}; color: var(--box-red-text); }}
+.box.w {{ background: var(--box-red-bg); border-color: {ROUGE}; color: var(--box-red-text); }}
 
 /* ── Prediction boxes ── */
 .pred-box {{
@@ -813,7 +814,18 @@ def kpi(label, val, delta="", cls=""):
 def sh(t): st.markdown(f'<div class="sh">{t}</div>', unsafe_allow_html=True)
 def box(t, cls=""): st.markdown(f'<div class="box {cls}">{t}</div>', unsafe_allow_html=True)
 def commentaire(t): st.markdown(f'<div class="commentaire"> <strong>{t}</strong></div>', unsafe_allow_html=True)
-
+def formulaire(t,pos='center',c='v'):
+    if c=="v": c=VERT
+    elif c=="r": c=ROUGE
+    elif c=="o": c=ORANGE
+    else: c=BLEU
+    
+    st.markdown(f"""<div style='background:{c}15;border:1px solid {BLEU}44;
+              border-radius:8px;padding:12px 16px;font-size:.9rem;
+              color:var(--text-primary);margin:8px 0;text-align:{pos};'>
+              <b>{t}(x)</b>
+            </div>""", unsafe_allow_html=True)
+    
 JOURS_FR   = {"Monday":"Lundi","Tuesday":"Mardi","Wednesday":"Mercredi",
                "Thursday":"Jeudi","Friday":"Vendredi","Saturday":"Samedi","Sunday":"Dimanche"}
 MOIS_FR    = {1:"Jan",2:"Fév",3:"Mar",4:"Avr",5:"Mai",6:"Jun",
@@ -2909,256 +2921,6 @@ elif PAGE == "⚙️  Feature Engineering":
 # ══════════════════════════════════════════════════════════════
 # P4 — MODÉLISATION
 # ══════════════════════════════════════════════════════════════
-elif PAGE == "🤖  Modélisation_V1":
-    st.title("Modélisation")
-    st.markdown("Construction, tuning et comparaison de trois modèles supervisés avec validation croisée temporelle.")
-    st.markdown("---")
-
-    # ══════════════════════════════════════════════════════════════
-    # SPLIT TEMPOREL
-    # ══════════════════════════════════════════════════════════════
-    sh("📅 Pourquoi un split temporel ?")
-
-    st.markdown("""
-    ### Le piège à éviter : le shuffle aléatoire
-
-    Dans un problème classique (classification d'images, prédiction de prix immobiliers), 
-    on mélange aléatoirement les données avant de les diviser. **Ce n'est pas possible ici**.
-
-    ### La spécificité des séries temporelles
-
-    Le trafic d'aujourd'hui dépend de celui d'hier. Si on mélangeait les dates, on pourrait :
-    - Entraîner le modèle sur des données de 2018 pour prédire 2015
-    - Créer une **fuite de données** (data leakage)
-    - Obtenir des performances artificiellement gonflées
-
-    ### La bonne pratique : split chronologique
-
-    Les données sont divisées **dans l'ordre du temps** :
-
-    - **Train** : 2015-07-03 → 2017-10-10 (premières données, pour apprendre)
-    - **Validation** : 2017-10-10 → 2018-04-06 (pour régler le modèle)
-    - **Test** : 2018-04-06 → 2018-09-30 (dernières données, pour évaluer)
-
-    **Aucune information future ne fuit dans le passé.**
-    """)
-
-    # Tableau récapitulatif
-    split_data = pd.DataFrame({
-        "Ensemble": ["Train", "Validation", "Test"],
-        "Début": ["2015-07-03", "2017-10-10", "2018-04-06"],
-        "Fin": ["2017-10-10", "2018-04-06", "2018-09-30"],
-        "Observations": ["19 924", "4 270", "4 270"],
-        "Proportion": ["70%", "15%", "15%"]
-    })
-
-    st.dataframe(split_data, use_container_width=True, hide_index=True)
-
-    box("""
-    💡 **Règle fondamentale** : En prédiction de séries temporelles, **le futur ne doit jamais contaminer le passé**. 
-    Le split temporel est la seule méthode valide pour évaluer honnêtement un modèle.
-    """, "b")
-
-    #=====================================
-    sh("📅 Split temporel : pourquoi et comment")
-
-    st.markdown("""
-    ### Pourquoi un split temporel ?
-
-    Contrairement à un problème classique où les données peuvent être mélangées aléatoirement, 
-    la prédiction de séries temporelles impose le respect de **l'ordre chronologique**.
-
-    **Règle d'or** : On ne peut pas entraîner un modèle sur des données futures pour prédire le passé.
-
-    ### La stratégie adoptée
-
-    Nous divisons les données en **trois ensembles temporels consécutifs** :
-
-    | Ensemble | Période | Observations | Rôle |
-    |----------|---------|--------------|------|
-    | **Train** | 2015-07-03 → 2017-10-10 | 19 924 (70%) | Apprentissage du modèle |
-    | **Validation** | 2017-10-10 → 2018-04-06 | 4 270 (15%) | Ajustement des hyperparamètres |
-    | **Test** | 2018-04-06 → 2018-09-30 | 4 270 (15%) | Évaluation finale (données jamais vues) |
-
-    **Ratio** : 70% / 15% / 15%
-    """)
-
-    # Visualisation du split temporel
-    st.subheader("📊 Visualisation du split")
-
-    # Création des plages pour la visualisation
-    train_range = ("2015-07-03", "2017-10-10")
-    val_range = ("2017-10-10", "2018-04-06")
-    test_range = ("2018-04-06", "2018-09-30")
-
-    fig = go.Figure()
-
-    # Ajout des barres horizontales
-    fig.add_trace(go.Bar(
-        y=["Période"],
-        x=[19],  # Largeur relative
-        orientation='h',
-        marker=dict(color=BLEU, cornerradius=5),
-        text=["Train (70%)"],
-        textposition='inside',
-        legendgroup="train",
-        name="Train (70%)"
-    ))
-
-    # Version plus détaillée avec Plotly
-    fig2 = go.Figure()
-
-    # Timeline
-    fig2.add_trace(go.Scatter(
-        x=['2015-07-03', '2017-10-10', '2018-04-06', '2018-09-30'],
-        y=[1, 1, 1, 1],
-        mode='markers+lines',
-        marker=dict(size=10, color=[BLEU, VERT, ORANGE, ROUGE]),
-        line=dict(color='gray', width=2),
-        showlegend=False
-    ))
-
-    # Ajout des zones
-    fig2.add_vrect(x0=0, x1=1, fillcolor=BLEU, opacity=0.3, layer="below", annotation_text="Train (70%)", annotation_position="top")
-    fig2.add_vrect(x0=1, x1=2, fillcolor=VERT, opacity=0.3, layer="below", annotation_text="Validation (15%)", annotation_position="top")
-    fig2.add_vrect(x0=2, x1=3, fillcolor=ORANGE, opacity=0.3, layer="below", annotation_text="Test (15%)", annotation_position="top")
-
-    fig2.update_layout(
-        title="Découpage temporel des données",
-        xaxis_title="Date",
-        yaxis=dict(showticklabels=False, title=""),
-        height=250,
-        **plo()
-    )
-
-    st.plotly_chart(fig2, use_container_width=True)
-
-    # Points clés
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown(f"""
-        <div class="info-box">
-            <b>📊 Train (70%)</b><br>
-            {train_range[0]}<br>
-            → {train_range[1]}<br>
-            <code>19 924 observations</code>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown(f"""
-        <div class="info-box">
-            <b>⚙️ Validation (15%)</b><br>
-            {val_range[0]}<br>
-            → {val_range[1]}<br>
-            <code>4 270 observations</code>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown(f"""
-        <div class="info-box">
-            <b>🎯 Test (15%)</b><br>
-            {test_range[0]}<br>
-            → {test_range[1]}<br>
-            <code>4 270 observations</code>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
-    
-    
-    
-    tab1,tab2,tab3,tab4 = st.tabs(["✂️ Split & Validation","🔵 Ridge","🌲 Random Forest","⚡ XGBoost"])
-
-    with tab1:
-        sh("Split temporel chronologique")
-        st.markdown("""Avec des données temporelles, un split aléatoire constitue du **data leakage** : le modèle pourrait voir le futur lors de l'entraînement. Règle absolue : **toujours entraîner sur le passé, valider sur le futur strict.**""")
-        c1,c2,c3 = st.columns(3)
-        with c1: kpi("Train (70%)","33 744 obs.","Mai 2016 → Nov. 2017")
-        with c2: kpi("Validation (15%)","7 231 obs.","Nov. 2017 → Avr. 2018","o")
-        with c3: kpi("Test (15%)","7 231 obs.","Avr. 2018 → Sep. 2018","r")
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        sh("TimeSeriesSplit — 5 folds pour le tuning des hyperparamètres")
-        fig = go.Figure()
-        for i in range(5):
-            te = 6000*(i+2); vs = te; ve = te+2000
-            fig.add_trace(go.Bar(x=[te],y=[f"Fold {i+1}"],orientation="h",base=0,
-                                  marker_color=BLEU,opacity=.8,showlegend=(i==0),name="Train"))
-            fig.add_trace(go.Bar(x=[ve-vs],y=[f"Fold {i+1}"],orientation="h",base=vs,
-                                  marker_color=ORANGE,opacity=.85,showlegend=(i==0),name="Validation"))
-            fig.add_trace(go.Bar(x=[20000-ve],y=[f"Fold {i+1}"],orientation="h",base=ve,
-                                  marker_color="#F1F5F9",opacity=.8,showlegend=(i==0),name="Non utilisé"))
-        fig.update_layout(barmode="overlay",height=240,**plo(),
-                          xaxis_title="Observations (ordre chronologique)",
-                          legend=dict(orientation="h",y=1.1))
-        st.plotly_chart(fig, use_container_width=True)
-        box("La taille du train croît à chaque fold. Aucun fold ne voit le futur lors de l'entraînement.", "g")
-
-    with tab2:
-        c1,c2 = st.columns([3,2])
-        with c1:
-            sh("Régression Ridge — Modèle baseline")
-            st.markdown("""Extension de la régression OLS avec **pénalité L2** : **Coût = Σ(y−ŷ)² + α×Σβ²**. Contraint les coefficients vers zéro sans les annuler, stabilisant l'estimation face à la multicolinéarité.""")
-            st.markdown(f"**Alpha optimal (RidgeCV, 5 folds) :** `{HYPERPARAMS.get('Ridge_alpha',1000.0)}`")
-            sh("Analyse multicolinéarité (VIF)")
-            vif_d = pd.DataFrame({
-                "Variable":["is_holiday","cloud","cloud_cat_*","month_sin","traffic_lag_2","traffic_lag_24","temp_c"],
-                "VIF initial":[5327980,138,"16–132",10.8,12.2,12.0,6.8],
-                "Décision":["❌ Supprimé","❌ Supprimé","✅ Gardé","⚠️ Arbitré","❌ Supprimé","✅ Gardé","✅ Gardé"],
-                "VIF final":["-","-","9.2","6.2","-","7.8","5.4"]})
-            st.dataframe(vif_d, use_container_width=True, hide_index=True)
-        with c2:
-            sh("Bilan Ridge")
-            for e,t,c in [("✅","Gère la multicolinéarité","g"),("✅","Interprétable (coefficients)","g"),
-                           ("✅","Rapide · reproductible","g"),("⚠️","Hypothèse de linéarité","o"),
-                           ("❌","Pas d'interactions non-linéaires","r"),("❌","Sous-estime les pics","r")]:
-                box(f"{e} {t}", c)
-
-    with tab3:
-        c1,c2 = st.columns([3,2])
-        with c1:
-            sh("Random Forest — Ensemble par bagging")
-            st.markdown("""Construit B arbres indépendants sur des sous-échantillons bootstrap, avec sélection aléatoire des features à chaque nœud. Prédiction = **moyenne des B arbres**.
-
-Deux mécanismes neutralisent la multicolinéarité :
-1. **Bootstrap** — chaque arbre voit un sous-échantillon différent
-2. **Sélection aléatoire des features** — variables corrélées séparées naturellement""")
-            sh("Meilleurs hyperparamètres (RandomizedSearchCV)")
-            rf_p = HYPERPARAMS.get("Random_Forest",{})
-            st.dataframe(pd.DataFrame(list(rf_p.items()),columns=["Hyperparamètre","Valeur"]),
-                         use_container_width=True, hide_index=True)
-        with c2:
-            sh("Bilan Random Forest")
-            for e,t,c in [("✅","Multicolinéarité native","g"),("✅","Non-linéarités & interactions","g"),
-                           ("✅","Normalisation inutile","g"),("✅","Importance intégrée","g"),
-                           ("⚠️","Taille modèle 98 MB","o"),("⚠️","Inférence plus lente","o")]:
-                box(f"{e} {t}", c)
-
-    with tab4:
-        c1,c2 = st.columns([3,2])
-        with c1:
-            sh("XGBoost — Gradient Boosting optimisé")
-            st.markdown("""Construit des arbres **séquentiellement** : chaque arbre corrige les erreurs du précédent. Régularisation intégrée L1 (`reg_alpha`) + L2 (`reg_lambda`) + sous-échantillonnage (`subsample`, `colsample_bytree`).""")
-            sh("Meilleurs hyperparamètres")
-            xgb_p = HYPERPARAMS.get("XGBoost",{})
-            st.dataframe(pd.DataFrame(list(xgb_p.items()),columns=["Hyperparamètre","Valeur"]),
-                         use_container_width=True, hide_index=True)
-        with c2:
-            sh("Courbe d'apprentissage")
-            iters = [0,50,100,150,200,250,300,499]
-            tr = [1780,292,205,182,169,158,146,113]
-            vl = [1872,340,278,272,272,271,271,271]
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=iters,y=tr,name="Train",line=dict(color=BLEU,width=2)))
-            fig.add_trace(go.Scatter(x=iters,y=vl,name="Validation",line=dict(color=ORANGE,width=2)))
-            fig.add_hline(y=271,line_dash="dot",line_color=GRIS,annotation_text="Conv. val ≈271")
-            fig.update_layout(height=250,**plo(),xaxis_title="Itérations",yaxis_title="RMSE",
-                              legend=dict(orientation="h",y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
-            box("Convergence vers iter. 150. Aucun overfitting.", "g")
 
 elif PAGE == "🤖  Modélisation":
  
@@ -3188,12 +2950,11 @@ elif PAGE == "🤖  Modélisation":
  
     st.markdown("<br>", unsafe_allow_html=True)
  
-    tab0, tab1, tab2, tab3, tab4 = st.tabs([
+    tab0, tab1, tab2, tab3 = st.tabs([
         "✂️ Préparation des données",
         "🔵 Ridge",
         "🌲 Random Forest",
-        "⚡ XGBoost",
-        "⚖️ Comparaison des choix"
+        "⚡ XGBoost"
     ])
  
     # ── TAB 0 : PRÉPARATION DES DONNÉES ──────────────────────────
@@ -3614,79 +3375,197 @@ elif PAGE == "🤖  Modélisation":
                     <div style='font-size:.82rem;color:var(--text-secondary);line-height:1.5;'>{desc}</div>
                     </div></div>""", unsafe_allow_html=True)
 
-    
+        sh("Résultats de Ridge")
+        with st.expander("", expanded=True):
+            sh("Hyperparamètre alpha optimisé ")
+            st.markdown("""
+            **Ridge - Régression linéaire régularisée**
+            
+            Le paramètre `alpha` contrôle la force de la régularisation L2.
+            """)
+            
+            ridge_params = pd.DataFrame({
+                "Paramètre": ["alpha"],
+                "Valeur": ["1000,0"],
+                "Rôle": ["Force de régularisation L2"],
+                "Impact": ["Valeur élevée → forte régularisation"]
+            })
+            st.dataframe(ridge_params, use_container_width=True, hide_index=True)
+            
+            st.markdown("""
+            💡 **Interprétation** : Un alpha élevé (1000) indique une forte régularisation. 
+            Cela signifie que les coefficients sont fortement réduits, ce qui est cohérent 
+            avec la présence de nombreuses variables corrélées (lags, moyennes mobiles).
+            """)
+            sh("📊 Performances du Ridge (baseline)")
+
+            # Métriques principales en évidence
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("R² Test", "0,903", "baseline de référence")
+
+            with col2:
+                st.metric("RMSE Test", "617,54", "référence")
+
+            with col3:
+                st.metric("MAPE Test", "28,02%", "référence")
+
+            st.markdown("---")
+
+            # Tableau détaillé
+            
+            st.markdown("**Détail des performances par ensemble**")
+            perf_df = pd.DataFrame({
+                "Ensemble": ["Train", "Validation", "Test"],
+                "RMSE": ["786,20", "650,24", "617,54"],
+                "MAE": ["562,34", "467,95", "433,62"],
+                "MAPE": ["38,94%", "31,90%", "28,02%"],
+                "R²": ["0,823", "0,891", "0,903"]
+            })
+            st.dataframe(perf_df, use_container_width=True, hide_index=True)
+
+
+            st.markdown("---")
+
+            # Graphique d'évolution des performances
+            fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+            # Graphique RMSE
+            ensembles = ["Train", "Validation", "Test"]
+            rmse_values = [786.20, 650.24, 617.54]
+            axes[0].bar(ensembles, rmse_values, color=[BLEU, VERT, ORANGE])
+            axes[0].set_ylabel("RMSE (véhicules/heure)")
+            axes[0].set_title("Erreur quadratique moyenne")
+            axes[0].grid(True, alpha=0.3)
+            for i, v in enumerate(rmse_values):
+                axes[0].text(i, v + 20, f"{v:.0f}", ha="center", fontweight="bold")
+
+            # Graphique R²
+            r2_values = [0.823, 0.891, 0.903]
+            axes[1].bar(ensembles, r2_values, color=[BLEU, VERT, ORANGE])
+            axes[1].set_ylabel("R²")
+            axes[1].set_title("Coefficient de détermination")
+            axes[1].set_ylim(0.7, 1.0)
+            axes[1].grid(True, alpha=0.3)
+            for i, v in enumerate(r2_values):
+                axes[1].text(i, v + 0.01, f"{v:.3f}", ha="center", fontweight="bold")
+
+            plt.tight_layout()
+            st.pyplot(fig)
+
+            
+            # Diagnostic spécifique Ridge
+            st.markdown(f"""
+            <div class="info-box" style="margin-top: 15px;">
+                <b>Diagnostic du modèle Ridge</b><br>
+                • Gap R² (Train - Val) : -0,068 → Val/Test meilleurs que Train<br>
+                • R² Test : 0,903 → Performance correcte (explique 90% de la variance)<br>
+                • MAPE Test : 28,0% → Erreur relative élevée (modèle linéaire limité)<br>
+                • Ce modèle constitue la <b>baseline</b> que les modèles non linéaires doivent surpasser.
+            </div>
+            """, unsafe_allow_html=True)
+
+            sh("Evaluation du Ridge ")
+            img_res_ridge = Image.open("assets/res_rid.png")
+            st.image(img_res_ridge, caption="Résultats de Ridge")
+            st.markdown("""
+            L'analyse visuelle des cinq graphiques d'évaluation confirme et enrichit les conclusions tirées des métriques numériques, tout en révélant des nuances importantes sur le comportement du modèle Ridge.
+
+            Le graphique **réel vs prédit** montre un alignement remarquable des points autour de la diagonale parfaite (R² = 0.891 sur la validation), attestant d'une relation linéaire forte et bien capturée par le modèle. On observe néanmoins deux zones de dispersion caractéristiques : une légère **sous-estimation systématique pour les faibles valeurs de trafic** (0–1000 véhicules), où les points s'écartent au-dessus de la diagonale, et une tendance à la **sous-estimation des pics élevés** (au-delà de 5000 véhicules), où les prédictions plafonnent — comportement typique d'un modèle linéaire qui lisse les extrêmes.
+
+            La **distribution des résidus** présente une forme quasi-gaussienne centrée sur une moyenne de 7 véhicules, ce qui témoigne d'un biais quasi nul et d'une absence de biais systématique global — une propriété fondamentale d'un bon modèle de régression. Toutefois, la distribution est **asymétrique vers la droite** avec une queue étalée jusqu'à +3000, révélant que le modèle commet occasionnellement de grosses erreurs de sous-estimation sur des pics de trafic exceptionnels qu'il ne parvient pas à anticiper.
+
+            Le graphique **résidus vs valeurs prédites** est le plus informatif sur les limites structurelles du modèle. On y observe clairement une **structure en éventail** — les résidus s'élargissent à mesure que les valeurs prédites augmentent — ce qui constitue une violation de l'hypothèse d'homoscédasticité. Plus révélateur encore, une **bande de résidus fortement négatifs** apparaît pour les faibles valeurs prédites (0–1000), correspondant vraisemblablement aux heures nocturnes où le modèle prédit un trafic positif alors que la réalité est proche de zéro. Cette structure suggère que les relations entre le trafic et certaines variables ne sont pas purement linéaires et que des transformations supplémentaires ou un modèle non-linéaire pourraient corriger ces déviations systématiques.
+
+            Enfin, les graphiques en barres **R² et RMSE par ensemble** confirment la progression monotone déjà commentée (R² : 0.823 → 0.891 → 0.903 ; RMSE : 786 → 650 → 618), soulignant l'absence totale d'overfitting et la robustesse de la généralisation du modèle Ridge — ce qui en fait une baseline solide et fiable pour la comparaison avec les modèles non-linéaires à venir.
+            """)
+
+            sh("predictions vs réalité")
+            img_pred_ridge = Image.open("assets/pred_rid.png")
+            st.image(img_pred_ridge, caption="Prédictions de Ridge vs Réalité")
+            st.markdown("""
+            ### Graphique 1 : Trafic journalier — semaine du 02/07/2018
+
+            La vue hebdomadaire révèle des performances **très contrastées selon les jours**, mettant en lumière des comportements que les métriques globales masquaient.
+
+            Les jours de semaine classiques — lundi (1.3%), mardi (2.9%), vendredi (0.5%) et dimanche (2.9%) — affichent des erreurs relatives **remarquablement faibles**, confirmant que le modèle a parfaitement appris les patterns de mobilité des jours ouvrés standard. La quasi-superposition des barres bleues et oranges sur ces jours témoigne d'une excellente capture des volumes journaliers habituels.
+
+            En revanche, **jeudi (55.7%)** constitue une anomalie frappante et inexpliquée — le modèle prédit environ 71 000 véhicules alors que la réalité atteint seulement 46 000. Cette erreur massive suggère un **événement exceptionnel non capturé par les features** : jour férié local, incident routier majeur, événement météorologique ponctuel, ou fermeture de route. C'est précisément le type de cas que ni les variables météo ni les encodages temporels ne peuvent anticiper sans une variable explicative dédiée. Le mercredi (9.4%) et le samedi (5.9%) présentent des erreurs modérées mais acceptables, reflétant la difficulté intrinsèque à modéliser les transitions semaine/week-end.
+
+            ---
+
+            ### Graphique 2 : Profil horaire — Mardi 03 juillet 2018
+
+            Le profil horaire est extrêmement instructif sur les forces et faiblesses structurelles du modèle Ridge.
+
+            **Les forces** sont visibles sur la majeure partie de la journée — la courbe prédite suit fidèlement la courbe réelle entre 9h et 15h, ainsi que sur la descente nocturne de 20h à 23h, avec des écarts (zone violette) quasi nuls. Le modèle capture correctement le **niveau de base de la journée** et la tendance générale du cycle diurne.
+
+            **Les limites** apparaissent clairement sur trois moments critiques. Premièrement, la **montée matinale (0h–7h)** est mal capturée — le modèle prédit un trafic de ~1300 véhicules à minuit alors que la réalité est proche de 800, puis sous-estime la remontée vers 6h-7h. Deuxièmement, le **pic du matin à 7h** (pointe matin, zone orange) est légèrement sous-estimé — le réel atteint ~5700 véhicules là où le modèle prédit ~5500 — ce qui est toutefois une performance honorable. Troisièmement et surtout, le **pic du soir à 16h** (pointe soir, zone verte) est significativement sous-estimé — le trafic réel explose à ~6100 véhicules tandis que le modèle plafonne à ~5500, un écart de 600 véhicules qui confirme la difficulté d'un modèle linéaire à capturer les discontinuités abruptes des heures de pointe. Cette sous-estimation systématique des pics est cohérente avec la structure en éventail observée dans le graphique résidus vs valeurs prédites — **plus le trafic est élevé, plus l'erreur est grande**.
+            """)
+        
         sh("Code d'entraînement")
         with st.expander("📄 Voir le code — Ridge", expanded=False):
             st.code("""from sklearn.linear_model import Ridge, RidgeCV
-from sklearn.model_selection import TimeSeriesSplit
- 
-tscv = TimeSeriesSplit(n_splits=5)
- 
-# Étape 1 : trouver le meilleur alpha par validation croisée temporelle
-alphas = [0.01, 0.1, 1, 10, 100, 1000, 10000]
-ridge_cv = RidgeCV(alphas=alphas, cv=tscv,
-                   scoring="neg_root_mean_squared_error")
-ridge_cv.fit(X_train_scaled, y_train)   # ← données standardisées !
-print(f"Meilleur alpha : {ridge_cv.alpha_}")   # → 1000.0
- 
-# Étape 2 : entraîner le modèle final
-model_ridge = Ridge(alpha=ridge_cv.alpha_)
-model_ridge.fit(X_train_scaled, y_train)
- 
-# Prédictions sur les données standardisées
-y_pred_val  = model_ridge.predict(X_val_scaled)
-y_pred_test = model_ridge.predict(X_test_scaled)""", language="python")
+            from sklearn.model_selection import TimeSeriesSplit
+            
+            tscv = TimeSeriesSplit(n_splits=5)
+            
+            # Étape 1 : trouver le meilleur alpha par validation croisée temporelle
+            alphas = [0.01, 0.1, 1, 10, 100, 1000, 10000]
+            ridge_cv = RidgeCV(alphas=alphas, cv=tscv,
+                            scoring="neg_root_mean_squared_error")
+            ridge_cv.fit(X_train_scaled, y_train)   # ← données standardisées !
+            print(f"Meilleur alpha : {ridge_cv.alpha_}")   # → 1000.0
+            
+            # Étape 2 : entraîner le modèle final
+            model_ridge = Ridge(alpha=ridge_cv.alpha_)
+            model_ridge.fit(X_train_scaled, y_train)
+            
+            # Prédictions sur les données standardisées
+            y_pred_val  = model_ridge.predict(X_val_scaled)
+            y_pred_test = model_ridge.predict(X_test_scaled)""", language="python")
  
     # ── TAB 2 : RANDOM FOREST ────────────────────────────────────
     with tab2:
-        sh("Random Forest — Modèle d'ensemble par bagging")
         sh("🌲 Modèle Random Forest : Forêt d'arbres de décision")
+        with st.expander("", expanded=True):
+            st.markdown("""
+            ### Qu'est-ce que le Random Forest ?
 
-        st.markdown("""
-        ### Qu'est-ce que le Random Forest ?
+            Le Random Forest est un **modèle d'apprentissage ensembliste** qui combine plusieurs centaines d'arbres de décision pour produire une prédiction plus robuste et plus précise que n'importe quel arbre pris isolément. L'idée est simple : demander l'avis de nombreux experts plutôt que de se fier à un seul.
 
-        Le Random Forest est un **modèle d'apprentissage ensembliste** qui combine plusieurs centaines d'arbres de décision pour produire une prédiction plus robuste et plus précise que n'importe quel arbre pris isolément. L'idée est simple : demander l'avis de nombreux experts plutôt que de se fier à un seul.
+            Chaque arbre de la forêt est entraîné sur un **échantillon aléatoire différent** des données (tirage avec remise, appelé bootstrap). De plus, à chaque division d'un nœud, l'algorithme ne considère qu'un **sous-ensemble aléatoire des variables** disponibles. Ces deux sources de hasard garantissent que les arbres sont **décorrélés** entre eux : ils apprennent des aspects différents du problème.
 
-        Chaque arbre de la forêt est entraîné sur un **échantillon aléatoire différent** des données (tirage avec remise, appelé bootstrap). De plus, à chaque division d'un nœud, l'algorithme ne considère qu'un **sous-ensemble aléatoire des variables** disponibles. Ces deux sources de hasard garantissent que les arbres sont **décorrélés** entre eux : ils apprennent des aspects différents du problème.
+            Pour une prédiction, chaque arbre donne son avis, et la forêt fait la **moyenne** de toutes les réponses. Cette agrégation réduit considérablement la variance par rapport à un arbre unique, tout en préservant un biais faible.
 
-        Pour une prédiction, chaque arbre donne son avis, et la forêt fait la **moyenne** de toutes les réponses. Cette agrégation réduit considérablement la variance par rapport à un arbre unique, tout en préservant un biais faible.
+            ### Comment choisir ses hyperparamètres ?
 
-        ### Pourquoi Random Forest est-il adapté à ce problème ?
+            Deux paramètres sont particulièrement importants :
 
-        **Premièrement, il capture naturellement les non-linéarités.** Contrairement à Ridge, Random Forest n'impose aucune forme linéaire. Il peut modéliser des effets de seuil – par exemple, l'impact majeur de la neige dès les premiers centimètres, ou la différence brutale entre une heure creuse et une heure de pointe.
+            - **`n_estimators`** : le nombre d'arbres dans la forêt. Plus il y a d'arbres, plus la prédiction est stable, mais le temps de calcul augmente. Au-delà d'un certain seuil (environ 100-200 arbres), le gain en performance devient marginal.
 
-        **Deuxièmement, il détecte automatiquement les interactions.** L'effet de la pluie n'est pas le même selon l'heure de la journée. Random Forest peut apprendre que "pluie ET heure de pointe" a un effet différent de la somme de leurs effets individuels. Aucune spécification manuelle n'est nécessaire.
+            - **`max_depth`** : la profondeur maximale de chaque arbre. Un arbre très profond capturera des détails très fins des données d'entraînement, au risque de surapprendre. Une profondeur modérée (entre 5 et 10) offre un bon compromis.
 
-        **Troisièmement, il est robuste aux outliers et aux variables non pertinentes.** Les arbres de décision partitionnent l'espace des variables en régions homogènes. Une valeur extrême isolée aura peu d'influence sur la structure globale de l'arbre. De même, une variable sans pouvoir prédictif sera simplement ignorée.
+            ### Quelles sont ses limites ?
 
-        **Quatrièmement, il fournit une mesure d'importance des variables.** Le modèle peut indiquer quelles variables contribuent le plus à la prédiction – un atout précieux pour l'interprétabilité.
+            Random Forest n'est pas une solution universelle. Il peut être **lourd en mémoire** (il faut stocker tous les arbres) et **plus lent en prédiction** que des modèles linéaires. Il a également tendance à **surapprendre** sur des données bruitées si la profondeur des arbres n'est pas suffisamment contrainte. Enfin, bien que l'importance des variables donne des indications, le modèle reste moins interprétable qu'une régression linéaire.
 
-        ### Comment choisir ses hyperparamètres ?
+            ### Dans ce projet
 
-        Deux paramètres sont particulièrement importants :
-
-        - **`n_estimators`** : le nombre d'arbres dans la forêt. Plus il y a d'arbres, plus la prédiction est stable, mais le temps de calcul augmente. Au-delà d'un certain seuil (environ 100-200 arbres), le gain en performance devient marginal.
-
-        - **`max_depth`** : la profondeur maximale de chaque arbre. Un arbre très profond capturera des détails très fins des données d'entraînement, au risque de surapprendre. Une profondeur modérée (entre 5 et 10) offre un bon compromis.
-
-        ### Quelles sont ses limites ?
-
-        Random Forest n'est pas une solution universelle. Il peut être **lourd en mémoire** (il faut stocker tous les arbres) et **plus lent en prédiction** que des modèles linéaires. Il a également tendance à **surapprendre** sur des données bruitées si la profondeur des arbres n'est pas suffisamment contrainte. Enfin, bien que l'importance des variables donne des indications, le modèle reste moins interprétable qu'une régression linéaire.
-
-        ### Dans ce projet
-
-        Nous utilisons Random Forest comme l'un de nos deux modèles ensemblistes (avec XGBoost). Sa capacité à capturer non-linéarités et interactions en fait un candidat idéal pour surpasser la baseline Ridge. Les résultats montrent qu'il atteint un R² de 0,989, soit une amélioration de près de 9 points par rapport à Ridge.
-        """)
-        #==============================================
-        st.markdown("""
-        Le Random Forest est le **principal modèle candidat** pour ce projet.
-        Il appartient à la famille des méthodes d'ensemble par *bagging*
-        (Bootstrap AGGregation) : il construit un grand nombre d'arbres de décision
-        indépendants et agrège leurs prédictions, réduisant ainsi la variance
-        sans augmenter le biais.
-        """)
+            Nous utilisons Random Forest comme l'un de nos deux modèles ensemblistes (avec XGBoost). Sa capacité à capturer non-linéarités et interactions en fait un candidat idéal pour surpasser la baseline Ridge. Les résultats montrent qu'il atteint un R² de 0,989, soit une amélioration de près de 9 points par rapport à Ridge.
+            """)
+            #==============================================
+            st.markdown("""
+            Le Random Forest est le **principal modèle candidat** pour ce projet.
+            Il appartient à la famille des méthodes d'ensemble par *bagging*
+            (Bootstrap AGGregation) : il construit un grand nombre d'arbres de décision
+            indépendants et agrège leurs prédictions, réduisant ainsi la variance
+            sans augmenter le biais.
+            """)
         st.markdown("---")
- 
+
+
         c1, c2 = st.columns([3, 2])
         with c1:
             sh("Concept — Bagging d'arbres de décision")
@@ -3704,26 +3583,7 @@ y_pred_test = model_ridge.predict(X_test_scaled)""", language="python")
               color:var(--text-primary);margin:8px 0;text-align:center;'>
               <b>RF(x) = (1/B) × Σ Treeᵦ(x)</b>
             </div>""", unsafe_allow_html=True)
- 
-            sh("Pourquoi Random Forest pour ce projet ?")
-            raisons_rf = [
-                (VERT, "Relations non-linéaires confirmées",
-                 "L'EDA a montré des patterns bimodaux (heures de pointe) et des discontinuités que la régression linéaire ne peut pas capturer."),
-                (BLEU, "Interactions temporelles × météo",
-                 "Un lundi pluvieux à 8h n'est pas la somme de 'lundi' + 'pluie' + '8h' — RF détecte ces interactions complexes automatiquement via les nœuds des arbres."),
-                (ORANGE, "Robustesse à la multicolinéarité",
-                 "Le sous-échantillonnage des features à chaque nœud sépare naturellement les variables corrélées entre différents arbres — pas besoin d'analyse VIF."),
-                (ROUGE, "Importance des variables intégrée",
-                 "La Mean Decrease Impurity (MDI) mesure la contribution de chaque feature, permettant une sélection et une interprétation post-entraînement.")
-            ]
-            for c_col, titre, desc in raisons_rf:
-                st.markdown(f"""<div style='display:flex;gap:12px;margin-bottom:12px;align-items:flex-start;'>
-                  <div style='min-width:4px;border-radius:4px;background:{c_col};align-self:stretch;'></div>
-                  <div>
-                    <div style='font-weight:600;font-size:.87rem;color:var(--text-primary);margin-bottom:2px;'>{titre}</div>
-                    <div style='font-size:.82rem;color:var(--text-secondary);line-height:1.5;'>{desc}</div>
-                  </div></div>""", unsafe_allow_html=True)
- 
+      
         with c2:
             sh("Meilleurs hyperparamètres")
             rf_p = HYPERPARAMS.get("Random_Forest", {})
@@ -3743,72 +3603,281 @@ y_pred_test = model_ridge.predict(X_test_scaled)""", language="python")
                     for k,v in rf_p.items()
                 ])
                 st.dataframe(rf_df, use_container_width=True, hide_index=True)
- 
+
+        
+        sh("Pourquoi Random Forest pour ce projet ?")
+        with st.expander("", expanded=True):
+            c1, c2 = st.columns([3, 2])
+            with c1:
+                st.markdown("""
+                #### Pourquoi Random Forest est-il adapté à ce problème ?
+                """)
+                st.markdown("---")
+                st.markdown("""
+                - **Premièrement, il capture naturellement les non-linéarités.** Contrairement à Ridge, Random Forest n'impose aucune forme linéaire. Il peut modéliser des effets de seuil – par exemple, l'impact majeur de la neige dès les premiers centimètres, ou la différence brutale entre une heure creuse et une heure de pointe.
+
+                - **Deuxièmement, il détecte automatiquement les interactions.** L'effet de la pluie n'est pas le même selon l'heure de la journée. Random Forest peut apprendre que "pluie ET heure de pointe" a un effet différent de la somme de leurs effets individuels. Aucune spécification manuelle n'est nécessaire.
+
+                - **Troisièmement, il est robuste aux outliers et aux variables non pertinentes.** Les arbres de décision partitionnent l'espace des variables en régions homogènes. Une valeur extrême isolée aura peu d'influence sur la structure globale de l'arbre. De même, une variable sans pouvoir prédictif sera simplement ignorée.
+
+                - **Quatrièmement, il fournit une mesure d'importance des variables.** Le modèle peut indiquer quelles variables contribuent le plus à la prédiction – un atout précieux pour l'interprétabilité.
+                """)
+                    
+            with c2:
+                st.markdown("#### Forces & Limites")
+                st.markdown("---")
+                for e,t,c in [
+                    ("✅","Capture les non-linéarités","v"),
+                    ("✅","Gère la multicolinéarité nativement","v"),
+                    ("✅","Pas de normalisation requise","v"),
+                    ("✅","Importance des variables intégrée","v"),
+                    ("✅","Robuste aux outliers","v"),
+                    ("⚠️","Modèle lourd (98 MB)","o"),
+                    ("⚠️","Inférence plus lente que XGBoost","o"),
+                    ("❌","Moins interprétable que Ridge","r"),
+                ]:
+                    #formulaire(f"{e} {t}",'left',c)
+                    formulaire(t,'left',c)
+            
+            st.markdown("---")
+            st.markdown("### En résumé : 4 bonnes raisons d'explorer RF ")
             st.markdown("<br>", unsafe_allow_html=True)
-            sh("Forces & Limites")
-            for e,t,c in [
-                ("✅","Capture les non-linéarités","g"),
-                ("✅","Gère la multicolinéarité nativement","g"),
-                ("✅","Pas de normalisation requise","g"),
-                ("✅","Importance des variables intégrée","g"),
-                ("✅","Robuste aux outliers","g"),
-                ("⚠️","Modèle lourd (98 MB)","o"),
-                ("⚠️","Inférence plus lente que XGBoost","o"),
-                ("❌","Moins interprétable que Ridge","r"),
-            ]:
-                box(f"{e} {t}", c)
- 
+            raisons_rf = [
+                (VERT, "Relations non-linéaires confirmées",
+                "L'EDA a montré des patterns bimodaux (heures de pointe) et des discontinuités que la régression linéaire ne peut pas capturer."),
+                (BLEU, "Interactions temporelles × météo",
+                "Un lundi pluvieux à 8h n'est pas la somme de 'lundi' + 'pluie' + '8h' — RF détecte ces interactions complexes automatiquement via les nœuds des arbres."),
+                (ORANGE, "Robustesse à la multicolinéarité",
+                "Le sous-échantillonnage des features à chaque nœud sépare naturellement les variables corrélées entre différents arbres — pas besoin d'analyse VIF."),
+                (ROUGE, "Importance des variables intégrée",
+                "La Mean Decrease Impurity (MDI) mesure la contribution de chaque feature, permettant une sélection et une interprétation post-entraînement.")
+            ]
+            for c_col, titre, desc in raisons_rf:
+                st.markdown(f"""<div style='display:flex;gap:12px;margin-bottom:12px;align-items:flex-start;'>
+                <div style='min-width:4px;border-radius:4px;background:{c_col};align-self:stretch;'></div>
+                <div>
+                    <div style='font-weight:600;font-size:.87rem;color:var(--text-primary);margin-bottom:2px;'>{titre}</div>
+                    <div style='font-size:.82rem;color:var(--text-secondary);line-height:1.5;'>{desc}</div>
+                </div></div>""", unsafe_allow_html=True)
+
         sh("Code d'entraînement")
         with st.expander("📄 Voir le code — Random Forest", expanded=False):
             st.code("""from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
- 
-tscv = TimeSeriesSplit(n_splits=5)
- 
-# Espace de recherche des hyperparamètres
-param_grid_rf = {
-    "n_estimators":      [100, 200, 300, 500],
-    "max_depth":         [None, 10, 20, 30],
-    "min_samples_split": [2, 5, 10],
-    "min_samples_leaf":  [1, 2, 4],
-    "max_features":      ["sqrt", "log2", 0.3],
-    "bootstrap":         [True, False]
-}
- 
-rf_search = RandomizedSearchCV(
-    estimator=RandomForestRegressor(random_state=42, n_jobs=-1),
-    param_distributions=param_grid_rf,
-    n_iter=20,            # 20 combinaisons aléatoires
-    cv=tscv,              # validation croisée temporelle
-    scoring="neg_root_mean_squared_error",
-    verbose=2, random_state=42, n_jobs=-1
-)
- 
-# ⚠️ Données NON standardisées pour RF
-rf_search.fit(X_train, y_train)
-print(f"Meilleurs paramètres : {rf_search.best_params_}")
-print(f"Meilleur RMSE CV : {-rf_search.best_score_:.0f}")
- 
-best_rf = RandomForestRegressor(**rf_search.best_params_,
-                                  random_state=42, n_jobs=-1)
-best_rf.fit(X_train, y_train)""", language="python")
- 
+            from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
+            
+            tscv = TimeSeriesSplit(n_splits=5)
+            
+            # Espace de recherche des hyperparamètres
+            param_grid_rf = {
+                "n_estimators":      [100, 200, 300, 500],
+                "max_depth":         [None, 10, 20, 30],
+                "min_samples_split": [2, 5, 10],
+                "min_samples_leaf":  [1, 2, 4],
+                "max_features":      ["sqrt", "log2", 0.3],
+                "bootstrap":         [True, False]
+            }
+            
+            rf_search = RandomizedSearchCV(
+                estimator=RandomForestRegressor(random_state=42, n_jobs=-1),
+                param_distributions=param_grid_rf,
+                n_iter=20,            # 20 combinaisons aléatoires
+                cv=tscv,              # validation croisée temporelle
+                scoring="neg_root_mean_squared_error",
+                verbose=2, random_state=42, n_jobs=-1
+            )
+            
+            # ⚠️ Données NON standardisées pour RF
+            rf_search.fit(X_train, y_train)
+            print(f"Meilleurs paramètres : {rf_search.best_params_}")
+            print(f"Meilleur RMSE CV : {-rf_search.best_score_:.0f}")
+            
+            best_rf = RandomForestRegressor(**rf_search.best_params_,
+                                            random_state=42, n_jobs=-1)
+            best_rf.fit(X_train, y_train)""", language="python")
+
+        sh("Résultats") 
+        with st.expander("", expanded=True):
+            st.markdown("""
+            Le Random Forest atteint un R² de 0,989 sur le test, soit une amélioration de près de 9 points par rapport à Ridge (R² = 0,90). 
+            Cette performance exceptionnelle s'explique par la capacité du modèle à capturer les non-linéarités et les interactions complexes présentes dans les données, que la régression linéaire ne peut pas modéliser.
+            """)
+            sh("📊 Performances du Random Forest")
+            # Métriques principales en évidence
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("R² Test", "0,989", "+0,086 vs Ridge")
+
+            with col2:
+                st.metric("RMSE Test", "209,61", "-408 vs Ridge")
+
+            with col3:
+                st.metric("MAPE Test", "5,78%", "-22 pts vs Ridge")
+
+            st.markdown("---")
+            # Métriques pour chaque ensemble
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.markdown(f"""
+                <div class="card" style="text-align: center;">
+                    <h3 style="margin: 0 0 10px 0;">📚 Train</h3>
+                    <p><b>RMSE</b> : 98,47</p>
+                    <p><b>MAE</b> : 52,91</p>
+                    <p><b>MAPE</b> : 3,62%</p>
+                    <p><b>R²</b> : 0,997</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col2:
+                st.markdown(f"""
+                <div class="card" style="text-align: center;">
+                    <h3 style="margin: 0 0 10px 0;">⚙️ Validation</h3>
+                    <p><b>RMSE</b> : 267,25</p>
+                    <p><b>MAE</b> : 166,77</p>
+                    <p><b>MAPE</b> : 7,07%</p>
+                    <p><b>R²</b> : 0,982</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col3:
+                st.markdown(f"""
+                <div class="card" style="text-align: center;">
+                    <h3 style="margin: 0 0 10px 0;">🎯 Test</h3>
+                    <p><b>RMSE</b> : 209,61</p>
+                    <p><b>MAE</b> : 135,28</p>
+                    <p><b>MAPE</b> : 5,78%</p>
+                    <p><b>R²</b> : 0,989</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Diagnostic de généralisation
+            st.markdown(f"""
+            <br></br>
+            Gap R² (Train - Val) : 0,016 → Écart très faible entre train et validation<br>
+            R² Test : 0,989 : Performance exceptionnelle<br>
+            Le modèle généralise correctement, pas de surapprentissage.<br>
+            """, unsafe_allow_html=True)
+            
+            #hyperparamètres optimaux
+            sh("Hyperparamètres optimaux")
+            st.markdown("""
+            Les hyperparamètres ont été choisis pour équilibrer performance et généralisation.
+            """)
+            
+            rf_params = pd.DataFrame({
+                "Paramètre": ["n_estimators", "max_depth", "min_samples_split", "min_samples_leaf", "max_features", "bootstrap"],
+                "Valeur": ["200", "30", "10", "2", "0,3", "False"],
+                "Rôle": [
+                    "Nombre d'arbres",
+                    "Profondeur maximale",
+                    "Échantillons min. pour diviser",
+                    "Échantillons min. par feuille",
+                    "Fraction des features",
+                    "Échantillonnage bootstrap"
+                ],
+                "Impact": [
+                    "Plus d'arbres = plus stable",
+                    "Profond → capture les détails",
+                    "Élevé → limite le surapprentissage",
+                    "Faible → arbres plus détaillés",
+                    "30% des features par nœud",
+                    "Désactivé (entraînement sur toutes les données)"
+                ]
+            })
+            st.dataframe(rf_params, use_container_width=True, hide_index=True)
+            
+            st.markdown("""
+            💡 **Interprétation** : 
+            - `max_depth = 30` permet aux arbres de capturer des interactions complexes
+            - `min_samples_split = 10` et `min_samples_leaf = 2` limitent le surapprentissage
+            - `max_features = 0.3` décorrèle les arbres (30% des variables à chaque nœud)
+            - `bootstrap = False` : tous les arbres voient toutes les données (légère variation via max_features)
+            """)
+
+            # Visualisation
+            st.markdown("---")
+            sh("Evaluation visuelle des performances")
+            img = Image.open("assets/res_rf.png")
+            st.image(img, caption="evaluation de la performance du RF")
+            st.markdown("""
+                Le modèle Random Forest optimisé atteint des performances exceptionnelles sur l'ensemble de test, avec un coefficient de détermination R² de 0,989, signifiant que 98,9% de la variance du trafic horaire est expliquée. L'erreur quadratique moyenne (RMSE) s'élève à 209,6 véhicules/heure, tandis que l'erreur absolue moyenne (MAE) est de 135,3 véhicules/heure. L'erreur relative moyenne (MAPE) de 5,78% confirme l'excellente précision du modèle.
+                L'analyse de la généralisation révèle une grande robustesse : l'écart de R² entre l'entraînement (0,997) et la validation (0,982) n'est que de 0,015 point, témoignant d'une absence de surapprentissage. De plus, les performances sur le test surpassent celles de la validation (R² test = 0,989 vs 0,982, RMSE test = 209,6 vs 267,3), ce qui indique une excellente capacité de généralisation à des données non vues.
+            """)
+
+            st.markdown("---")
+            sh("L'importance des variables ")
+            img_imp = Image.open("assets/importance_rf.png")
+            st.image(img_imp, caption="Importance des variables dans le RF")
+            st.markdown("""
+            ### Les quatre variables dominantes (~75% de l'information)
+
+            **`hour_cos` (0.245)** est de loin la variable la plus importante — elle encode la position dans le cycle de 24h et permet au modèle de distinguer les régimes nuit/jour/pointe. Son importance supérieure à `hour_sin` s'explique par le fait que le cosinus capture mieux la symétrie du cycle autour de minuit.
+
+            **`traffic_lag_1` (0.210)** confirme que **le meilleur prédicteur du trafic actuel est le trafic de l'heure précédente** — l'inertie temporelle du trafic est un signal dominant. Cette variable à elle seule porte autant d'information que toutes les variables météo réunies.
+
+            **`traffic_lag_24` (0.147)** capture le **même créneau horaire la veille** — un lundi à 8h se prédit bien en regardant le lundi précédent à 8h. Cette variable encode implicitement la saisonnalité hebdomadaire.
+
+            **`hour` (0.118)** et **`traffic_lag_2` (0.075)** complètent le tableau temporel — leur présence aux côtés de `hour_cos` illustre la redondance partielle entre encodage brut et cyclique, que Random Forest gère naturellement sans pénalité.
+
+            ---
+
+            ### Variables secondaires — Le signal météo est faible
+
+            ```
+            snow_cat    0.026
+            hour_sin    0.024
+            snow        0.022
+            is_rush_hour 0.021
+            ```
+
+            La neige apparaît deux fois (`snow_cat` et `snow`) avec des importances modestes mais réelles — cohérent avec l'analyse exploratoire qui montrait un effet limité. `is_rush_hour` confirme que les heures de pointe apportent un signal marginal **au-delà de ce que `hour_cos` et les lags capturent déjà**.
+
+            `rain` et `rain_cat` ferment le classement avec des importances quasi nulles (~0.01), confirmant définitivement que **la pluie n'est pas un déterminant significatif du trafic** dans ce dataset — résultat cohérent avec le scatterplot exploratoire initial.
+
+            ---
+
+            ### En resumé
+
+            Le trafic urbain est avant tout un **phénomène temporel et auto-corrélé** — savoir quelle heure il est et quel était le trafic récemment suffit à expliquer l'essentiel. La météo joue un rôle secondaire, ce qui suggère que des améliorations futures devraient davantage cibler l'**enrichissement des features temporelles** (jours fériés, événements spéciaux) plutôt que l'ajout de nouvelles variables météorologiques.
+        """)
+
+            st.markdown("---")
+            sh("Prédictions vs Réalité")
+            img_pred = Image.open("assets/pred_rf.png")
+            st.image(img_pred, caption="Prédictions vs Réalité")
+            st.markdown("""
+                        #### Graphique 1 : Semaine du 02/07/2018
+                L'amélioration par rapport à Ridge est **immédiatement visible** — les barres bleues et oranges sont quasi-superposées sur presque tous les jours. Les erreurs relatives sont remarquablement faibles : lundi (0.9%), mardi (2.2%), jeudi (1.6%), vendredi (2.2%), samedi (1.5%) et dimanche (0.2%) — toutes **inférieures à 3%**, ce qui représente une précision opérationnelle excellente.
+
+                Le **mercredi (17.5%)** reste problématique — Random Forest sur-estime le trafic réel (~46 000) en prédisant ~53 000. Cependant l'erreur a **diminué par rapport à Ridge **, confirmant que le modèle gère mieux les anomalies ponctuelles sans les résoudre complètement. Cet événement exceptionnel du mercredi 04/07 — qui coïncide avec l'**Independence Day américain** (4 juillet), potentiellement un jour de forte activité sur cet axe routier — reste difficile à anticiper sans variable dédiée aux jours fériés.
+
+                ---
+
+                ### Graphique 2 : Profil horaire — Mardi 03 juillet 2018
+
+                La progression est spectaculaire par rapport à Ridge. La zone violette (écart) est **quasiment invisible** sur la majorité de la journée — les courbes réelle et prédite se superposent presque parfaitement de 0h à 15h et de 19h à 23h.
+
+                Les heures de pointe, qui constituaient le talon d'Achille de Ridge, sont désormais **bien capturées** — le pic matinal à 7h (~5700 véhicules) et le pic vespéral à 16h (~6100 véhicules) sont reproduits avec une précision remarquable. Random Forest réussit là où Ridge échouait structurellement, grâce à sa capacité à modéliser les **discontinuités abruptes** caractéristiques des heures de pointe.
+
+                La seule zone d'écart visible concerne la **descente nocturne après 20h**, où le modèle sous-estime légèrement le trafic réel — un résidu mineur qui n'affecte pas la qualité globale des prédictions.
+             """)
+            
     # ── TAB 3 : XGBOOST ──────────────────────────────────────────
     with tab3:
-        sh("XGBoost — Gradient Boosting optimisé")
-        st.markdown("""
-        XGBoost (*eXtreme Gradient Boosting*) est le **troisième modèle évalué**,
-        représentant l'état de l'art en apprentissage par arbres de décision.
-        Contrairement au Random Forest qui construit des arbres en parallèle,
-        XGBoost les construit **séquentiellement** : chaque arbre corrige
-        les erreurs résiduelles du précédent.
-        """)
-        st.markdown("---")
- 
-        c1, c2 = st.columns([3, 2])
-        with c1:
-            sh("Concept — Boosting séquentiel")
+        sh("⚡ Modèle XGBoost : Gradient Boosting extrême")
+        with st.expander("", expanded=True):
             st.markdown("""
+            ### Qu'est-ce que XGBoost ?
+
+            XGBoost (eXtreme Gradient Boosting) est un modèle d'apprentissage ensembliste qui, comme Random Forest, combine plusieurs arbres de décision. Mais là où Random Forest construit ses arbres **indépendamment** en parallèle, XGBoost les construit **séquentiellement** : chaque nouvel arbre apprend à corriger les erreurs des arbres précédents.
+
+            L'analogie est simple : imaginez une équipe d'experts. Le premier expert fait une première estimation. Le second écoute l'erreur du premier et tente de la corriger. Le troisième corrige les résidus du second, et ainsi de suite. Au final, la prédiction est la somme des contributions de tous les experts, chacun spécialisé dans les erreurs des précédents.
+            """)
+            #==============================================
+            st.markdown("""
+            ## Concept — Boosting séquentiel
+            
             XGBoost minimise une fonction de coût régularisée à chaque itération :
             """)
             st.markdown(f"""<div style='background:{ORANGE}15;border:1px solid {ORANGE}44;
@@ -3821,293 +3890,293 @@ best_rf.fit(X_train, y_train)""", language="python")
               <span style='font-size:.78rem;color:var(--text-secondary);'>
               T = nb de feuilles · λ = pénalité L2 · γ = seuil de complexité</span>
             </div>""", unsafe_allow_html=True)
+
             st.markdown("""
-            La régularisation intégrée de XGBoost est **plus riche que Ridge** :
-            - `reg_alpha` (L1) : peut mettre des coefficients exactement à 0
-            - `reg_lambda` (L2) : contraint la norme des poids des feuilles
-            - `subsample` : sous-échantillonnage des observations (comme le bagging)
-            - `colsample_bytree` : sous-échantillonnage des features par arbre
+            ### La différence fondamentale avec Random Forest
+
+            | Aspect | Random Forest | XGBoost |
+            |--------|---------------|---------|
+            | **Construction** | Parallèle (indépendante) | Séquentielle (chaque arbre dépend du précédent) |
+            | **Objectif** | Réduire la variance (bagging) | Réduire le biais (boosting) |
+            | **Arbres** | Profonds (peuvent surapprendre) | Peu profonds (weak learners) |
+            | **Vitesse** | Modérée | Très rapide (optimisé) |
+            | **Régularisation** | Limitée | Intégrée (L1, L2) |
+
+            ### Pourquoi XGBoost est-il si performant ?
+
+            **Premièrement, son apprentissage séquentiel cible précisément les erreurs.** Chaque nouvel arbre se concentre sur les observations les plus difficiles à prédire. Le modèle affine progressivement ses prédictions, là où Random Forest fait simplement la moyenne d'arbres indépendants.
+
+            **Deuxièmement, XGBoost intègre une régularisation native.** Contrairement à Random Forest qui peut surapprendre si les arbres sont trop profonds, XGBoost pénalise la complexité des arbres. Cette régularisation limite naturellement le surapprentissage.
+
+            **Troisièmement, il est extrêmement rapide.** Des optimisations de bas niveau (parallélisation, cache, calculs approximatifs) rendent XGBoost bien plus rapide que le gradient boosting classique, à performances égales ou supérieures.
+
+            **Quatrièmement, il gère élégamment les valeurs manquantes.** XGBoost apprend automatiquement la direction à prendre lorsqu'une valeur est absente, évitant ainsi des imputations potentiellement biaisées.
+
+            ### Quels sont ses hyperparamètres clés ?
+
+            - **`n_estimators`** : nombre d'arbres. Plus il y a d'arbres, plus le modèle affine ses prédictions, mais au-delà d'un certain seuil, le risque de surapprentissage augmente.
+
+            - **`learning_rate`** (eta) : taux d'apprentissage. Chaque arbre contribue à hauteur de ce facteur (typiquement 0,01-0,3). Un taux faible nécessite plus d'arbres mais donne des modèles plus robustes.
+
+            - **`max_depth`** : profondeur des arbres. XGBoost utilise généralement des arbres peu profonds (3-8), car chaque arbre n'a besoin que de corriger une partie des erreurs.
+
+            - **`subsample`** : fraction des données utilisée par arbre. Réduire ce paramètre (ex: 0,8) diminue la corrélation entre arbres et limite le surapprentissage.
+
+            ### Quelles sont ses limites ?
+
+            XGBoost est moins interprétable que Random Forest. Bien qu'il fournisse une importance des variables, la compréhension fine des interactions est plus complexe. De plus, il est plus sensible aux hyperparamètres : un mauvais réglage peut conduire à du surapprentissage ou au contraire à un sous-apprentissage. Enfin, bien qu'optimisé, l'entraînement reste plus long que celui de Ridge.
+
+            ### Dans ce projet
+
+            XGBoost est notre deuxième modèle ensembliste. Ses performances (R² = 0,988) sont quasi identiques à celles de Random Forest (0,989). Les deux modèles se valent, mais Random Forest est retenu pour sa légère avance et sa plus grande simplicité de paramétrage.
             """)
- 
-            sh("Pourquoi XGBoost pour ce projet ?")
-            raisons_xgb = [
-                (ORANGE, "Régularisation multi-niveaux",
-                 "La combinaison L1+L2+sous-échantillonnage offre plus de leviers anti-overfitting que Random Forest, particulièrement utile sur un dataset aussi riche en features (52 variables)."),
-                (VERT, "Efficacité computationnelle",
-                 "XGBoost est 10 à 100× plus rapide que Random Forest en inférence et produit un modèle 20× plus léger (4 MB vs 98 MB) — décisif pour un déploiement en production."),
-                (BLEU, "Convergence contrôlable",
-                 "La courbe d'apprentissage (RMSE train vs validation) permet de détecter précisément le point optimal d'arrêt et d'éviter l'overfitting de manière visuelle."),
-                (ROUGE, "Comparaison avec RF",
-                 "Tester XGBoost après RF permet de savoir si l'approche séquentielle apporte un gain supplémentaire — ou si RF a déjà saturé le signal disponible.")
-            ]
-            for c_col, titre, desc in raisons_xgb:
-                st.markdown(f"""<div style='display:flex;gap:12px;margin-bottom:12px;align-items:flex-start;'>
-                  <div style='min-width:4px;border-radius:4px;background:{c_col};align-self:stretch;'></div>
-                  <div>
-                    <div style='font-weight:600;font-size:.87rem;color:var(--text-primary);margin-bottom:2px;'>{titre}</div>
-                    <div style='font-size:.82rem;color:var(--text-secondary);line-height:1.5;'>{desc}</div>
-                  </div></div>""", unsafe_allow_html=True)
- 
-        with c2:
+        
+        st.markdown("### XGBoost : pourquoi un deuxième modèle ensembliste ?")
+        with st.expander("", expanded=True):
+
+            st.markdown("""
+            ### La nécessité de comparer
+
+            Random Forest et XGBoost sont deux approches ensemblistes **fondamentalement différentes** :
+
+            - **Random Forest** (bagging) : construit des arbres indépendants en parallèle → réduit la variance
+            - **XGBoost** (boosting) : construit des arbres séquentiels qui se corrigent mutuellement → réduit le biais
+
+            Il n'est pas évident a priori laquelle des deux approches est la mieux adaptée à un problème donné. 
+            Certaines situations favorisent le bagging (données bruitées, risque de surapprentissage), d'autres 
+            le boosting (relations complexes, besoin de précision maximale).
+
+            ### L'objectif de cette double approche
+
+            En testant les deux, nous nous assurons d'avoir exploré l'espace des modèles ensemblistes. 
+            Si l'un des deux surpasse nettement l'autre, nous saurons quelle famille d'algorithmes privilégier 
+            à l'avenir. Si leurs performances sont proches – ce qui est le cas ici – nous pouvons choisir 
+            le plus simple ou le plus rapide.
+
+            ### Le verdict sur ce projet
+
+            Random Forest (R² = 0,989) et XGBoost (R² = 0,988) sont quasiment à égalité. 
+            Nous retenons Random Forest pour sa légère avance et sa plus grande tolérance 
+            aux hyperparamètres par défaut.
+            """)
+        
+        st.markdown("---")
+
+        sh("Résultats" )
+        with st.expander("", expanded=True):
+            sh("📊 Performances du XGBoost")
+
+            # Métriques principales en évidence
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("R² Test", "0,988", "-0,001 vs Random Forest")
+
+            with col2:
+                st.metric("RMSE Test", "212,92", "+3,31 vs Random Forest")
+
+            with col3:
+                st.metric("MAPE Test", "5,95%", "+0,17 pts vs Random Forest")
+
+            st.markdown("---")
+
+            #hyp = HYPERPARAMS.get("XGBoost", {})
+            
             sh("Meilleurs hyperparamètres")
-            xgb_p = HYPERPARAMS.get("XGBoost", {})
-            if xgb_p:
-                xgb_desc = {
-                    "n_estimators": "Nb d'arbres",
-                    "learning_rate": "Taux d'apprentissage",
-                    "max_depth": "Profondeur max",
-                    "subsample": "Sous-éch. observations",
-                    "colsample_bytree": "Sous-éch. features",
-                    "reg_alpha": "Pénalité L1",
-                    "reg_lambda": "Pénalité L2",
-                    "min_child_weight": "Poids min enfant"
-                }
-                xgb_df = pd.DataFrame([
-                    {"Hyperparamètre": k,
-                     "Valeur": str(v),
-                     "Rôle": xgb_desc.get(k, "")}
-                    for k,v in xgb_p.items()
-                ])
-                st.dataframe(xgb_df, use_container_width=True, hide_index=True)
- 
-            sh("Courbe d'apprentissage")
-            iters = [0,50,100,150,200,250,300,350,400,450,499]
-            tr = [1780,292,205,182,169,158,146,137,128,120,113]
-            vl = [1872,340,278,272,272,271,271,271,271,271,271]
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=iters,y=tr,name="Train",
-                                      line=dict(color=BLEU,width=2)))
-            fig.add_trace(go.Scatter(x=iters,y=vl,name="Validation",
-                                      line=dict(color=ORANGE,width=2)))
-            fig.add_hline(y=271,line_dash="dot",line_color=GRIS,
-                          annotation_text="Convergence ≈ 271",
-                          annotation_font_color=T_SECONDARY)
-            fig.add_vline(x=150,line_dash="dash",line_color=VERT,
-                          annotation_text="~150 iter",
-                          annotation_font_color=VERT)
-            fig.update_layout(height=260, **plo(),
-                              xaxis_title="Itérations",
-                              yaxis_title="RMSE",
-                              legend=dict(orientation="h",y=1.12,
-                                          font=dict(color=T_SECONDARY)))
-            st.plotly_chart(fig, use_container_width=True)
-            box("Convergence de la validation dès ~150 itérations. Aucune remontée → pas d'overfitting. La régularisation intégrée est efficace.", "g")
- 
+            st.markdown("""
+            **XGBoost - Gradient Boosting extrême**
+            
+            XGBoost intègre une régularisation native (L1 et L2) pour limiter le surapprentissage.
+            """)
+            
+            xgb_params = pd.DataFrame({
+                "Paramètre": ["n_estimators", "max_depth", "learning_rate", "subsample", "colsample_bytree", "min_child_weight", "reg_alpha", "reg_lambda"],
+                "Valeur": ["500", "8", "0,05", "0,9", "0,7", "5", "0,1", "2"],
+                "Rôle": [
+                    "Nombre d'arbres",
+                    "Profondeur maximale",
+                    "Taux d'apprentissage",
+                    "Fraction des lignes",
+                    "Fraction des colonnes",
+                    "Poids minimum enfant",
+                    "Régularisation L1",
+                    "Régularisation L2"
+                ],
+                "Impact": [
+                    "500 arbres → affinage progressif",
+                    "Arbres peu profonds (8)",
+                    "Petit pas d'apprentissage",
+                    "90% des données par arbre",
+                    "70% des features par arbre",
+                    "Évite les feuilles trop petites",
+                    "Pénalité L1 (parcimonie)",
+                    "Pénalité L2 (stabilité)"
+                ]
+            })
+            st.dataframe(xgb_params, use_container_width=True, hide_index=True)
+            
+            st.markdown("""
+            💡 **Interprétation** : 
+            - `learning_rate = 0,05` : apprentissage lent et progressif
+            - `max_depth = 8` : arbres relativement peu profonds (chaque arbre corrige une partie des erreurs)
+            - `reg_alpha = 0,1` et `reg_lambda = 2` : régularisation L1/L2 pour limiter le surapprentissage
+            - `subsample = 0,9` : échantillonnage aléatoire des lignes pour décorréler les arbres
+            """)
+
+            # Tableau détaillé
+            #sh("📊 Performances du XGBoost")
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.markdown(f"""
+                <div class="card" style="text-align: center;">
+                    <h3 style="margin: 0 0 10px 0;">📚 Train</h3>
+                    <p><b>RMSE</b> : 112,17</p>
+                    <p><b>MAE</b> : 73,06</p>
+                    <p><b>MAPE</b> : 4,08%</p>
+                    <p><b>R²</b> : 0,996</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col2:
+                st.markdown(f"""
+                <div class="card" style="text-align: center;">
+                    <h3 style="margin: 0 0 10px 0;">⚙️ Validation</h3>
+                    <p><b>RMSE</b> : 267,28</p>
+                    <p><b>MAE</b> : 168,47</p>
+                    <p><b>MAPE</b> : 7,40%</p>
+                    <p><b>R²</b> : 0,982</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col3:
+                st.markdown(f"""
+                <div class="card" style="text-align: center;">
+                    <h3 style="margin: 0 0 10px 0;">🎯 Test</h3>
+                    <p><b>RMSE</b> : 212,92</p>
+                    <p><b>MAE</b> : 137,72</p>
+                    <p><b>MAPE</b> : 5,95%</p>
+                    <p><b>R²</b> : 0,988</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+            <div class="info-box" style="margin-top: 15px;">
+                <b>Diagnostic de généralisation</b><br>
+                Gap R² (Train - Val) : 0,015 : Écart très faible, excellente généralisation.<br>
+                R² Test (0,988) > R² Validation (0,982) : Performance stable sur données non vues.
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("---")
+            sh("Evaluation visuelle de la courbe d'apprentissage")
+            img_courbe = Image.open("assets/courbe_xgb.png")
+            st.image(img_courbe, caption="Courbe d'apprentissage de XGBoost")
+            st.markdown("""
+                La courbe d'apprentissage du modèle XGBoost illustre la progression de l'erreur (RMSE) en fonction du nombre d'itérations. Dans les premières itérations, on observe une décroissance rapide du RMSE sur l'ensemble d'entraînement, signe que le modèle capture efficacement les structures principales des données. Simultanément, le RMSE sur l'ensemble de validation diminue également, témoignant d'une bonne capacité de généralisation précoce.
+
+                Après un certain nombre d'itérations, la courbe de validation atteint un plateau, indiquant que l'ajout d'arbres supplémentaires n'améliore plus significativement la généralisation. La courbe d'entraînement continue de décroître légèrement, ce qui est normal pour un modèle de boosting. L'écart final entre les deux courbes reste maîtrisé et stable, sans signe de remontée de la courbe de validation.
+
+                Cette configuration est caractéristique d'un apprentissage optimal : le modèle a trouvé un bon équilibre entre l'apprentissage des données d'entraînement et la capacité à généraliser sur des données non vues. L'absence de remontée de la courbe de validation confirme l'absence de surapprentissage sévère, tandis que l'atteinte d'un plateau garantit que le nombre d'itérations est suffisant pour capturer les patterns complexes du trafic.
+                 """)
+            
+            st.markdown("---")
+            sh("Visualisation des performances")
+            img_res = Image.open("assets/res_xgboost.png")
+            st.image(img_res, caption="Évaluation des performances du XGBoost")
+            st.markdown("""
+            Le modèle XGBoost atteint des performances exceptionnelles sur l'ensemble de test, avec un coefficient de détermination R² de 0,988, signifiant que 98,8% de la variance du trafic horaire est expliquée. L'erreur quadratique moyenne (RMSE) s'élève à 213,0 véhicules/heure, tandis que l'erreur absolue moyenne (MAE) est de 137,7 véhicules/heure. L'erreur relative moyenne (MAPE) de 5,95% confirme l'excellente précision du modèle, avec une déviation relative inférieure à 6%.
+
+            L'analyse de la généralisation révèle une grande robustesse : l'écart de R² entre l'entraînement (0,996) et la validation (0,981) n'est que de 0,015 point, témoignant d'une absence de surapprentissage. De plus, les performances sur le test surpassent celles de la validation (RMSE test = 213,0 vs 270,7, R² test = 0,988 vs 0,981), ce qui indique une excellente capacité de généralisation à des données non vues.
+
+            Le modèle XGBoost bénéficie de sa régularisation intégrée qui limite naturellement le surapprentissage, comme en témoigne l'écart contrôlé entre les performances d'entraînement et de validation. Ces résultats confirment que XGBoost est parfaitement adapté à la prédiction du trafic routier, avec une précision exceptionnelle et une excellente stabilité.
+            """)
+
+            st.markdown("---")
+            sh("L'importance des variables ")
+            img_imp_xgb = Image.open("assets/imp_xgb.png")
+            st.image(img_imp_xgb, caption="Importance des caractéristiques - XGBoost")
+            st.markdown("""
+            L'analyse de l'importance des variables révèle que la cyclicité horaire est le facteur dominant, représentant près de 50% de l'importance totale du modèle. La variable hour_cos (44,3%) capture la structure fondamentale du cycle journalier, confirmant que l'heure de la journée est le prédicteur primordial du trafic routier.
+
+            Les conditions météorologiques, en particulier la neige, constituent le deuxième facteur d'influence majeur avec 30,6% d'importance cumulée. La catégorisation de l'intensité neigeuse (snow_cat) et la valeur instantanée (snow) dominent largement, tandis que la pluie joue un rôle plus modeste (2,3%). Ce résultat s'explique par l'impact plus perturbateur de la neige sur les conditions de circulation dans le Minnesota.
+
+            Le trafic passé, via les lags, contribue à 11,9% de l'importance, confirmant l'inertie naturelle du phénomène : le trafic de l'heure précédente (traffic_lag_1) est le plus influent, suivi de la saisonnalité journalière (traffic_lag_24). Les indicateurs d'heures de pointe (is_rush_hour) et de week-end (is_weekend) complètent le modèle avec des effets propres significatifs.
+
+            Cette hiérarchie des influences est cohérente avec la connaissance du domaine : l'heure structure la mobilité, les conditions météo extrêmes (neige) modifient les comportements, et l'inertie temporelle assure la continuité des flux.
+            """)
+        
         sh("Code d'entraînement")
         with st.expander("📄 Voir le code — XGBoost", expanded=False):
             st.code("""from xgboost import XGBRegressor
-from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
- 
-tscv = TimeSeriesSplit(n_splits=5)
- 
-param_grid_xgb = {
-    "n_estimators":     [200, 300, 500, 800],
-    "learning_rate":    [0.01, 0.05, 0.1, 0.2],
-    "max_depth":        [3, 4, 5, 6, 8],
-    "subsample":        [0.6, 0.7, 0.8, 0.9, 1.0],
-    "colsample_bytree": [0.6, 0.7, 0.8, 0.9, 1.0],
-    "reg_alpha":        [0, 0.01, 0.1, 1],
-    "reg_lambda":       [0.5, 1, 2, 5],
-    "min_child_weight": [1, 3, 5]
-}
- 
-xgb_search = RandomizedSearchCV(
-    estimator=XGBRegressor(random_state=42, n_jobs=-1, verbosity=0),
-    param_distributions=param_grid_xgb,
-    n_iter=30, cv=tscv,
-    scoring="neg_root_mean_squared_error",
-    verbose=2, random_state=42, n_jobs=-1
-)
- 
-# ⚠️ Données NON standardisées pour XGBoost
-xgb_search.fit(X_train, y_train,
-               eval_set=[(X_val, y_val)], verbose=False)
- 
-best_xgb = XGBRegressor(**xgb_search.best_params_,
-                          random_state=42, n_jobs=-1, verbosity=0)
-best_xgb.fit(X_train, y_train,
-             eval_set=[(X_train, y_train),(X_val, y_val)],
-             verbose=50)""", language="python")
- 
-    # ── TAB 4 : COMPARAISON DES CHOIX ────────────────────────────
-    with tab4:
-        sh("Pourquoi ces trois modèles ensemble ?")
-        st.markdown("""
-        Le choix de combiner Ridge, Random Forest et XGBoost n'est pas arbitraire :
-        il répond à une **stratégie de comparaison progressive** qui permet de
-        quantifier le gain apporté par chaque niveau de complexité supplémentaire.
-        """)
- 
-        # Tableau comparatif des choix
-        comp_choix = pd.DataFrame({
-            "Critère": [
-                "Type de modèle",
-                "Hypothèse centrale",
-                "Multicolinéarité",
-                "Non-linéarités",
-                "Standardisation",
-                "Interprétabilité",
-                "Vitesse inférence",
-                "Taille modèle",
-                "Usage recommandé"
-            ],
-            "🔵 Ridge": [
-                "Linéaire régularisé",
-                "Relation linéaire",
-                "Gérée via pénalité L2",
-                "❌ Non",
-                "✅ Obligatoire",
-                "⭐⭐⭐ Coefficients directs",
-                "⭐⭐⭐ Très rapide",
-                "< 1 MB",
-                "Interprétabilité requise"
-            ],
-            "🌲 Random Forest": [
-                "Ensemble (bagging)",
-                "Aucune (non paramétrique)",
-                "Gérée nativement",
-                "✅ Oui",
-                "❌ Inutile",
-                "⭐⭐ Importance MDI",
-                "⭐⭐ Moyen",
-                "98 MB",
-                "Performance maximale"
-            ],
-            "⚡ XGBoost": [
-                "Ensemble (boosting)",
-                "Aucune (non paramétrique)",
-                "Gérée nativement",
-                "✅ Oui",
-                "❌ Inutile",
-                "⭐⭐ Importance SHAP",
-                "⭐⭐⭐ Rapide",
-                "4 MB",
-                "Production temps réel"
-            ]
-        })
-        st.dataframe(comp_choix, use_container_width=True, hide_index=True)
- 
-        st.markdown("<br>", unsafe_allow_html=True)
- 
-        # Diagramme de la stratégie
-        sh("Stratégie de modélisation progressive")
-        c1, c2, c3 = st.columns(3)
-        for (col_html, icone, titre, sous_titre, desc, c_bord) in [
-            (c1, "🔵", "Ridge", "Baseline linéaire",
-             "Établit la performance minimale attendue. Si Random Forest n'améliore pas significativement Ridge, la relation est essentiellement linéaire.",
-             BLEU),
-            (c2, "🌲", "Random Forest", "Modèle principal",
-             "Valide l'hypothèse de non-linéarité. Le gain par rapport à Ridge quantifie l'importance des interactions et discontinuités dans les données.",
-             VERT),
-            (c3, "⚡", "XGBoost", "Modèle de production",
-             "Vérifie si le boosting séquentiel apporte un gain supplémentaire sur le bagging. Confirme ou infirme la saturation du signal par Random Forest.",
-             ORANGE),
-        ]:
-            with col_html:
-                st.markdown(f"""<div style='background:var(--bg-card);
-                  border:1px solid var(--border);border-radius:12px;
-                  padding:20px;border-top:4px solid {c_bord};text-align:center;'>
-                  <div style='font-size:2rem;margin-bottom:8px;'>{icone}</div>
-                  <div style='font-weight:700;font-size:.95rem;color:var(--text-primary);'>{titre}</div>
-                  <div style='font-size:.75rem;color:{c_bord};font-weight:600;
-                               margin:4px 0 10px;'>{sous_titre}</div>
-                  <div style='font-size:.8rem;color:var(--text-secondary);
-                               line-height:1.5;text-align:left;'>{desc}</div>
-                </div>""", unsafe_allow_html=True)
- 
-        st.markdown("<br>", unsafe_allow_html=True)
-        box("L'écart de R² entre Ridge (0.903) et Random Forest (0.989) confirme que les relations dans ce dataset sont <b>fondamentalement non-linéaires</b>. L'indiscernabilité entre RF et XGBoost (ΔR²=0.001) montre que le signal disponible est <b>pleinement capturé</b> par les méthodes d'ensemble.", "g")
- 
- 
+            from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
+            
+            tscv = TimeSeriesSplit(n_splits=5)
+            
+            param_grid_xgb = {
+                "n_estimators":     [200, 300, 500, 800],
+                "learning_rate":    [0.01, 0.05, 0.1, 0.2],
+                "max_depth":        [3, 4, 5, 6, 8],
+                "subsample":        [0.6, 0.7, 0.8, 0.9, 1.0],
+                "colsample_bytree": [0.6, 0.7, 0.8, 0.9, 1.0],
+                "reg_alpha":        [0, 0.01, 0.1, 1],
+                "reg_lambda":       [0.5, 1, 2, 5],
+                "min_child_weight": [1, 3, 5]
+            }
+            
+            xgb_search = RandomizedSearchCV(
+                estimator=XGBRegressor(random_state=42, n_jobs=-1, verbosity=0),
+                param_distributions=param_grid_xgb,
+                n_iter=30, cv=tscv,
+                scoring="neg_root_mean_squared_error",
+                verbose=2, random_state=42, n_jobs=-1
+            )
+            
+            # ⚠️ Données NON standardisées pour XGBoost
+            xgb_search.fit(X_train, y_train,
+                        eval_set=[(X_val, y_val)], verbose=False)
+            
+            best_xgb = XGBRegressor(**xgb_search.best_params_,
+                                    random_state=42, n_jobs=-1, verbosity=0)
+            best_xgb.fit(X_train, y_train,
+                        eval_set=[(X_train, y_train),(X_val, y_val)],
+                        verbose=50)""", language="python")
+            
 # ══════════════════════════════════════════════════════════════
 # P5 — ÉVALUATION
 # ══════════════════════════════════════════════════════════════
 elif PAGE == "📈  Évaluation & Performances":
     st.title("Évaluation & Performances")
-    st.markdown("Comparaison rigoureuse des trois modèles sur les ensembles train, validation et test.")
+    #st.markdown("Comparaison rigoureuse des trois modèles sur les ensembles train, validation et test.")
     st.markdown("---")
+    sh("Comparaison des performances")
+    df_c = pd.DataFrame({
+        "Modèle":["Ridge","Random Forest","XGBoost"],
+        "R² Train":[0.823,0.997,0.996],"R² Val":[0.891,0.982,0.981],
+        "R² Test":[0.903,0.989,0.988],"RMSE Val":[650,267,271],
+        "RMSE Test":[618,210,213],"MAE Test":[434,135,138],
+        "MAPE Test":["28.0%","5.8%","5.9%"],"Gap R²":["-0.068 ℹ️","+0.015 ✅","+0.015 ✅"]})
+    
+    st.dataframe(df_c, use_container_width=True, hide_index=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    tab1,tab2,tab3 = st.tabs(["🏆 Comparaison globale","📅 Analyse temporelle","🔍 Résidus"])
+    sh("📊 Analyse synthétique des performances")
+    img_comp = Image.open("assets/comparaison.png")
+    st.image(img_comp, caption="Comparaison des performances des modèles")
+    st.markdown("""
+    Trois approches de modélisation ont été évaluées : une régression Ridge régularisée (modèle linéaire), une Forêt Aléatoire et XGBoost (modèles ensemblistes). Les résultats montrent une nette supériorité des approches non linéaires, avec des gains spectaculaires sur l'ensemble des métriques.
 
-    with tab1:
-        df_c = pd.DataFrame({
-            "Modèle":["Ridge","Random Forest","XGBoost"],
-            "R² Train":[0.823,0.997,0.996],"R² Val":[0.891,0.982,0.981],
-            "R² Test":[0.903,0.989,0.988],"RMSE Val":[650,267,271],
-            "RMSE Test":[618,210,213],"MAE Test":[434,135,138],
-            "MAPE Test":["28.0%","5.8%","5.9%"],"Gap R²":["-0.068 ℹ️","+0.015 ✅","+0.015 ✅"]})
-        st.dataframe(df_c.style
-            .highlight_max(subset=["R² Train","R² Val","R² Test"],color="#DCFCE7")
-            .highlight_min(subset=["RMSE Val","RMSE Test","MAE Test"],color="#DCFCE7"),
-            use_container_width=True, hide_index=True)
-        st.markdown("<br>", unsafe_allow_html=True)
+    La Forêt Aléatoire obtient les meilleures performances globales : R² de 0,989 (contre 0,903 pour Ridge), RMSE de 210 véhicules/heure (contre 618), MAE de 135 véhicules/heure (contre 434) et MAPE de 5,8% (contre 28,0%). XGBoost affiche des performances quasi identiques (R² = 0,988, RMSE = 213), confirmant la robustesse des approches ensemblistes.
 
-        c1,c2 = st.columns(2)
-        with c1:
-            sh("R² par ensemble")
-            mods = ["Ridge","Random Forest","XGBoost"]
-            fig = go.Figure()
-            fig.add_trace(go.Bar(name="Train",x=mods,y=[0.823,0.997,0.996],
-                                  marker_color="#BFDBFE",text=["0.823","0.997","0.996"],textposition="inside"))
-            fig.add_trace(go.Bar(name="Val",x=mods,y=[0.891,0.982,0.981],
-                                  marker_color=BLEU,text=["0.891","0.982","0.981"],textposition="inside"))
-            fig.add_trace(go.Bar(name="Test",x=mods,y=[0.903,0.989,0.988],
-                                  marker_color=DARK,text=["0.903","0.989","0.988"],
-                                  textposition="inside",textfont=dict(color="white")))
-            fig.update_layout(barmode="group",height=300,yaxis_range=[0.78,1.01],
-                              legend=dict(orientation="h",y=1.1),**plo())
-            st.plotly_chart(fig, use_container_width=True)
-        with c2:
-            sh("RMSE Test (↓ meilleur)")
-            fig = go.Figure(go.Bar(x=mods,y=[618,210,213],
-                                    marker_color=["#94A3B8",BLEU,VERT],
-                                    text=["618 véh.","210 véh.","213 véh."],textposition="outside"))
-            fig.add_annotation(x="Random Forest",y=210,text="🏆",showarrow=True,arrowhead=2,ay=-35)
-            fig.update_layout(height=300,yaxis_range=[0,720],yaxis_title="RMSE (véh/h)",
-                              **plo(margin=dict(t=40,b=0,l=0,r=0)))
-            st.plotly_chart(fig, use_container_width=True)
+    L'analyse de la généralisation révèle que les trois modèles sont bien calibrés, avec des écarts entre les performances d'entraînement et de test faibles ou positifs. Le gain apporté par les modèles ensemblistes par rapport à la régression linéaire est de l'ordre de 65% de réduction de l'erreur de prédiction.
 
-        sh("Synthèse")
-        c1,c2,c3 = st.columns(3)
-        for (titre,r2,detail,c,desc),col in zip([
-            ("Ridge — Baseline","R²=0.903","RMSE=618 · MAPE=28%",GRIS,
-             "Excellent pour un modèle linéaire. Limité par l'hypothèse de linéarité sur les pics."),
-            ("🏆 Random Forest","R²=0.989","RMSE=210 · MAPE=5.8%",VERT,
-             "+9.5 pts vs Ridge. Capture les non-linéarités. Recommandé pour la prédiction batch."),
-            ("XGBoost","R²=0.988","RMSE=213 · MAPE=5.9%",ORANGE,
-             "Indiscernable de RF (ΔR²=0.001). 4MB vs 98MB. Recommandé en production temps réel."),
-        ],[c1,c2,c3]):
-            with col:
-                st.markdown(f"""<div style='border:1px solid var(--border);border-radius:12px;padding:18px;
-                  border-top:4px solid {c};'>
-                  <div style='font-weight:700;font-size:.88rem;color:var(--text-primary);margin-bottom:8px;'>{titre}</div>
-                  <div style='font-size:1.6rem;font-weight:700;color:{c};'>{r2}</div>
-                  <div style='font-size:.78rem;color:var(--text-secondary);margin:4px 0 12px;'>{detail}</div>
-                  <div style='font-size:.8rem;color:var(--text-secondary);line-height:1.5;'>{desc}</div>
-                </div>""", unsafe_allow_html=True)
+    Random Forest est le meilleur modèle au sens des métriques, mais XGBoost constitue une alternative de production plus légère avec des performances quasi-identiques. Dans un contexte opérationnel de prédiction de trafic en temps réel, XGBoost serait probablement privilégié pour sa rapidité d'inférence et sa mémoire réduite, tandis que Random Forest serait recommandé pour des prédictions batch  où la performance prime sur la vitesse. Dans notre cas nous allons retenir XGBoost pour sa raison de rapidité.
+                """)
 
-    with tab2:
-        sh("Performance par jour de semaine — Random Forest")
-        mj = pd.DataFrame({"Jour":["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"],
-                            "RMSE":[230.5,209.3,216.0,182.9,198.1,232.9,192.5],
-                            "MAE":[133.4,133.8,135.4,126.4,131.5,153.4,132.6],
-                            "R²":[0.987,0.990,0.990,0.992,0.990,0.977,0.983]})
-        c1,c2 = st.columns(2)
-        with c1:
-            fig = px.bar(mj,x="Jour",y="R²",color="R²",color_continuous_scale=["#FEF9C3",VERT],
-                         text="R²",labels={"Jour":"","R²":"R² Test"})
-            fig.update_traces(texttemplate="%{text:.3f}",textposition="outside")
-            fig.update_layout(height=280,yaxis_range=[0.965,.995],coloraxis_showscale=False,**plo())
-            st.plotly_chart(fig, use_container_width=True)
-        with c2:
-            fig = px.bar(mj,x="Jour",y="RMSE",color="RMSE",
-                         color_continuous_scale=[VERT,"#FEF9C3",ROUGE],
-                         text="RMSE",labels={"Jour":"","RMSE":"RMSE"})
-            fig.update_traces(texttemplate="%{text:.0f}",textposition="outside")
-            fig.update_layout(height=280,coloraxis_showscale=False,**plo())
-            st.plotly_chart(fig, use_container_width=True)
-        box("Jeudi = meilleur (R²=0.992, RMSE=183). Samedi = plus difficile (transition week-end). Lundi = variabilité max (reprise irrégulière, ponts).", "g")
-
+    
+    sh("📅 Analyse temporelle")
+    with st.expander("", expanded=True) :
         sh("Réel vs Prédit — Semaine du 02/07/2018")
         ms = st.selectbox("Modèle", ["Random Forest","XGBoost","Ridge"])
         cp = {"Random Forest":"pred_rf","XGBoost":"pred_xgb","Ridge":"pred_ridge"}[ms]
@@ -4124,13 +4193,14 @@ elif PAGE == "📈  Évaluation & Performances":
             for _,row in sj.iterrows():
                 err = abs(row["traffic"]-row[cp])/row["traffic"]*100 if row["traffic"]>0 else 0
                 fig.add_annotation(x=row["jour"],y=max(row["traffic"],row[cp])+2000,
-                                   text=f"{err:.1f}%",showarrow=False,font=dict(size=10,color=GRIS))
+                                text=f"{err:.1f}%",showarrow=False,font=dict(size=10,color=GRIS))
             fig.update_layout(barmode="group",height=330,yaxis_title="Volume total (véh/jour)",
-                              **plo(margin=dict(t=30,b=0,l=0,r=0)))
+                            **plo(margin=dict(t=30,b=0,l=0,r=0)))
             st.plotly_chart(fig, use_container_width=True)
-        box("Independence Day (04/07) : erreur 17% RF vs 55% Ridge. Tous les autres jours < 3%.", "o")
-
-    with tab3:
+        #box("Independence Day (04/07) : erreur 17% RF vs 55% Ridge. Tous les autres jours < 3%.", "o")
+    
+    sh("🔍Résidus et erreurs de prédiction")
+    with st.expander("", expanded=True):
         sh("Analyse des résidus")
         mr = st.selectbox("Modèle", ["Random Forest","XGBoost","Ridge"], key="rmod")
         cr = {"Random Forest":"pred_rf","XGBoost":"pred_xgb","Ridge":"pred_ridge"}[mr]
@@ -4139,16 +4209,16 @@ elif PAGE == "📈  Évaluation & Performances":
         c1,c2 = st.columns(2)
         with c1:
             fig = px.histogram(df_r,x="res",nbins=80,color_discrete_sequence=[BLEU],
-                               labels={"res":"Résidu (véhicules)"})
+                            labels={"res":"Résidu (véhicules)"})
             fig.add_vline(x=0,line_dash="dash",line_color=ROUGE)
             fig.add_vline(x=df_r["res"].mean(),line_dash="dot",line_color=ORANGE,
-                          annotation_text=f"Biais={df_r['res'].mean():.0f}")
+                        annotation_text=f"Biais={df_r['res'].mean():.0f}")
             fig.update_layout(height=260,title="Distribution des résidus",**plo())
             st.plotly_chart(fig, use_container_width=True)
         with c2:
             fig = px.scatter(df_r.sample(min(3000,len(df_r))),x=cr,y="res",opacity=.25,
-                             color_discrete_sequence=[VERT],
-                             labels={cr:"Valeurs prédites","res":"Résidus"})
+                            color_discrete_sequence=[VERT],
+                            labels={cr:"Valeurs prédites","res":"Résidus"})
             fig.add_hline(y=0,line_dash="dash",line_color=ROUGE)
             fig.update_layout(height=260,title="Résidus vs Valeurs prédites",**plo())
             st.plotly_chart(fig, use_container_width=True)
@@ -4157,11 +4227,11 @@ elif PAGE == "📈  Évaluation & Performances":
         with c1:
             s2 = df_r.sample(min(3000,len(df_r)))
             fig = px.scatter(s2,x="traffic",y=cr,opacity=.2,color_discrete_sequence=[BLEU],
-                             labels={"traffic":"Réel",cr:"Prédit"})
+                            labels={"traffic":"Réel",cr:"Prédit"})
             mn = min(df_r["traffic"].min(),df_r[cr].min())
             mx = max(df_r["traffic"].max(),df_r[cr].max())
             fig.add_trace(go.Scatter(x=[mn,mx],y=[mn,mx],mode="lines",
-                                     line=dict(color=ROUGE,dash="dash"),name="Parfait"))
+                                    line=dict(color=ROUGE,dash="dash"),name="Parfait"))
             fig.update_layout(height=260,title="Réel vs Prédit",**plo())
             st.plotly_chart(fig, use_container_width=True)
         with c2:
@@ -4174,6 +4244,26 @@ elif PAGE == "📈  Évaluation & Performances":
             st.markdown("<br>",unsafe_allow_html=True)
             kpi("Erreur < 200 véh.",f"{(df_r['res'].abs()<200).mean()*100:.1f}%","","g")
 
+    st.markdown("---")
+    sh("Synthèse")
+    c1,c2,c3 = st.columns(3)
+    for (titre,r2,detail,c,desc),col in zip([
+        ("Ridge — Baseline","R²=0.903","RMSE=618 · MAPE=28%",GRIS,
+            "Excellent pour un modèle linéaire. Limité par l'hypothèse de linéarité sur les pics."),
+        ("🏆 Random Forest","R²=0.989","RMSE=210 · MAPE=5.8%",VERT,
+            "+9.5 pts vs Ridge. Capture les non-linéarités. Recommandé pour la prédiction batch."),
+        ("XGBoost","R²=0.988","RMSE=213 · MAPE=5.9%",ORANGE,
+            "Indiscernable de RF (ΔR²=0.001). 4MB vs 98MB. Recommandé en production temps réel."),
+    ],[c1,c2,c3]):
+        with col:
+            st.markdown(f"""<div style='border:1px solid var(--border);border-radius:12px;padding:18px;
+                border-top:4px solid {c};'>
+                <div style='font-weight:700;font-size:.88rem;color:var(--text-primary);margin-bottom:8px;'>{titre}</div>
+                <div style='font-size:1.6rem;font-weight:700;color:{c};'>{r2}</div>
+                <div style='font-size:.78rem;color:var(--text-secondary);margin:4px 0 12px;'>{detail}</div>
+                <div style='font-size:.8rem;color:var(--text-secondary);line-height:1.5;'>{desc}</div>
+            </div>""", unsafe_allow_html=True)
+    
 
 # ══════════════════════════════════════════════════════════════
 # P6 — SHAP
