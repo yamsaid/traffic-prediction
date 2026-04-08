@@ -825,7 +825,30 @@ def formulaire(t,pos='center',c='v'):
               color:var(--text-primary);margin:8px 0;text-align:{pos};'>
               <b>{t}(x)</b>
             </div>""", unsafe_allow_html=True)
-    
+
+# utils/shap_utils.py
+import shap
+
+@st.cache_data
+def compute_shap_values(model, X_sample):
+    """Calcule les valeurs SHAP pour un échantillon"""
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X_sample)
+    return shap_values, explainer
+
+def display_summary_plot(shap_values, X_sample, feature_names):
+    """Affiche le summary plot SHAP"""
+    fig, ax = plt.subplots(figsize=(12, 8))
+    shap.summary_plot(shap_values, X_sample, feature_names=feature_names, show=False)
+    plt.tight_layout()
+    return fig
+
+def display_force_plot(explainer, shap_values, instance, instance_name="Prédiction"):
+    """Affiche un force plot pour une instance spécifique"""
+    fig = plt.figure()
+    shap.force_plot(explainer.expected_value, shap_values, instance, matplotlib=True, show=False)
+    return fig
+  
 JOURS_FR   = {"Monday":"Lundi","Tuesday":"Mardi","Wednesday":"Mercredi",
                "Thursday":"Jeudi","Friday":"Vendredi","Saturday":"Samedi","Sunday":"Dimanche"}
 MOIS_FR    = {1:"Jan",2:"Fév",3:"Mar",4:"Avr",5:"Mai",6:"Jun",
@@ -1249,63 +1272,424 @@ if MODE == "pro":
 
     # ── P-PRO-1 : Tableau de bord ──
     if PAGE == "🏠  Tableau de bord":
-        st.markdown(f"""
-        <div style='margin-bottom:20px;'>
-          <h1 style='font-size:2rem;font-weight:700;color:var(--text-primary);margin:0;'>
-            Tableau de bord · TrafficML</h1>
-          <p style='color:var(--text-secondary);font-size:.95rem;margin-top:6px;'>
-            Interstate 94 · Minneapolis-Saint Paul · Prédiction du trafic horaire</p>
-        </div>""", unsafe_allow_html=True)
+        # ══════════════════════════════════════════════════════════════
+    
+        # ============================================
+        # PAGE D'ACCUEIL
+        # ============================================
+        # Utilisation
+        display_logo(variant="default", location="main")
 
-        c1,c2,c3,c4 = st.columns(4)
-        with c1: kpi("R² Test","0.989","Variance expliquée","g")
-        with c2: kpi("RMSE","210 véh/h","Erreur moyenne","g")
-        with c3: kpi("MAPE","5.8 %","Erreur relative","g")
-        with c4: kpi("Données","48 204 obs.","2012 – 2018")
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.title("Prédiction du volume de trafic urbain")
 
-        # Série temporelle
-        sh("Évolution historique du trafic (2012–2018)")
-        daily = df_raw.groupby(df_raw["date_time"].dt.date)["traffic_volume"].mean().reset_index()
-        daily.columns = ["date","trafic"]
-        fig = px.line(daily, x="date", y="trafic",
-                      color_discrete_sequence=[BLEU],
-                      labels={"trafic":"Trafic moyen (véh/h)","date":""})
-        fig.update_traces(line_width=1.5)
-        fig.update_layout(height=260, **plo())
-        st.plotly_chart(fig, use_container_width=True)
+        paragraphe(classe="text-primary", style="text-align: center;", text="Smart City - Minneapolis-Saint Paul")
 
-        c1, c2 = st.columns(2)
-        with c1:
-            sh("Profil horaire moyen")
-            hd = df_raw.groupby(df_raw["date_time"].dt.hour)["traffic_volume"].mean().reset_index()
-            hd.columns = ["h","t"]
-            fig = go.Figure()
-            fig.add_vrect(x0=7,x1=9,fillcolor=ORANGE,opacity=.12,annotation_text="Pointe matin")
-            fig.add_vrect(x0=16,x1=19,fillcolor=VERT,opacity=.12,annotation_text="Pointe soir")
-            fig.add_trace(go.Scatter(x=hd["h"],y=hd["t"],mode="lines+markers",
-                                      line=dict(color=BLEU,width=2.5),marker=dict(size=6),
-                                      fill="tozeroy",fillcolor=f"{BLEU}18"))
-            fig.update_layout(height=270,
-                              xaxis=dict(tickvals=list(range(0,24,2)),gridcolor=GRID_COLOR,
-                                         color=T_SECONDARY,title="Heure"),
-                              yaxis=dict(gridcolor=GRID_COLOR,color=T_SECONDARY,title="Trafic moyen"),
-                              **{k:v for k,v in plo().items() if k not in ["xaxis","yaxis"]})
-            st.plotly_chart(fig, use_container_width=True)
+        st.markdown("##")
+        st.markdown(" ")
+        paragraphe(classe="custom-text",text="""Bienvenue sur l'application de prédiction du trafic urbain pour la zone de Minneapolis-Saint Paul.
+        Ce projet vise à fournir des prédictions précises du volume de trafic horaire sur l'Interstate 94,
+        en utilisant des données temporelles et météorologiques.
+        L'application est conçue pour être interactive et informative, permettant aux utilisateurs de comprendre les facteurs influençant le trafic et d'explorer différentes scénarios.
+        """)
 
-        with c2:
-            sh("Trafic par jour de semaine")
-            jours_ord = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-            tj = df_raw.groupby(df_raw["date_time"].dt.day_name())["traffic_volume"].mean().reindex(jours_ord).reset_index()
-            tj.columns = ["j","t"]
-            tj["jf"] = tj["j"].map(JOURS_FR)
-            fig = px.bar(tj,x="jf",y="t",color="t",
-                         color_continuous_scale=["#DBEAFE","#1E3A8A"],
-                         labels={"jf":"","t":"Trafic moyen (véh/h)"})
-            fig.update_layout(height=270,coloraxis_showscale=False,**plo())
-            st.plotly_chart(fig, use_container_width=True)
+        #==================
 
-        box("Le trafic atteint ses pics entre <b>7h-9h</b> (départ travail) et <b>16h-19h</b> (retour), avec des volumes ~40% plus élevés en semaine qu'en week-end. La saisonnalité estivale (juin-août) génère les volumes maximaux.", "g")
+        header(n=2,text = "🤖 Aperçu des modèles comparés")
+        with st.expander("", expanded=True):
+            st.markdown("""
+            Trois modèles de machine learning ont été entraînés et comparés pour 
+            la prédiction du volume de trafic horaire.
+            """)
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.markdown("""
+                <div style="
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                    border-top: 4px solid #e74c3c;
+                    color: black;
+                ">
+                    <h3 style="margin: 0;">📐 Ridge</h3>
+                    <p style="color: black; margin: 5px 0;">Régression linéaire</p>
+                    <hr>
+                    <p><strong>R²</strong> : <span style="color: #e74c3c; font-weight: bold;">0,903</span></p>
+                    <p><strong>RMSE</strong> : <span style="color: #e74c3c; font-weight: bold;">618</span></p>
+                    <p><strong>MAPE</strong> : <span style="color: #e74c3c; font-weight: bold;">28,0%</span></p>
+                    <p><strong> </strong> <span style="color: #e74c3c; font-weight: bold;"> ___ </span></p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col2:
+                st.markdown("""
+                <div style="
+                    background: #e8f8f5;
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                    border-top: 4px solid #27ae60;
+                    color: black;
+                ">
+                    <h3 style="margin: 0;">🌲 Random Forest</h3>
+                    <p style="color: black; margin: 5px 0;">Ensemble (Bagging)</p>
+                    <hr>
+                    <p><strong>R²</strong> : <span style="color: #27ae60; font-weight: bold;">0,989</span></p>
+                    <p><strong>RMSE</strong> : <span style="color: #27ae60; font-weight: bold;">210</span></p>
+                    <p><strong>MAPE</strong> : <span style="color: #27ae60; font-weight: bold;">5,8%</span></p>
+                    <p style="margin-top: 10px;"><span style="background: #27ae60; color: white; padding: 3px 10px; border-radius: 15px;">🏆 Meilleur</span></p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col3:
+                st.markdown("""
+                <div style="
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                    border-top: 4px solid #3498db;
+                    color: black;
+                ">
+                    <h3 style="margin: 0;">⚡ XGBoost</h3>
+                    <p style="color: black; margin: 5px 0;">Ensemble (Boosting)</p>
+                    <hr>
+                    <p><strong>R²</strong> : <span style="color: #3498db; font-weight: bold;">0,988</span></p>
+                    <p><strong>RMSE</strong> : <span style="color: #3498db; font-weight: bold;">213</span></p>
+                    <p><strong>MAPE</strong> : <span style="color: #3498db; font-weight: bold;">5,9%</span></p>
+                    <p><strong> </strong> <span style="color: #3498db; font-weight: bold;"> ___ </span></p>
+
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("---")
+            # Graphique de comparaison
+            st.subheader("Comparaison des modèles")
+
+            comparison_data = pd.DataFrame({
+                'Modèle': ['Ridge', 'Random Forest', 'XGBoost'],
+                'R²': [0.903, 0.989, 0.988],
+                'RMSE': [618, 210, 213],
+                'MAE': [434, 135, 138]
+            })
+
+            #st.dataframe(comparison_data, use_container_width=True)
+
+            # Graphique à barres
+            fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+            # R²
+            axes[0].bar(comparison_data['Modèle'], comparison_data['R²'], 
+                        color=['steelblue', 'green', 'coral'])
+            axes[0].set_ylabel('R²')
+            axes[0].set_title('Coefficient de détermination')
+            axes[0].set_ylim(0.8, 1.0)
+            for i, v in enumerate(comparison_data['R²']):
+                axes[0].text(i, v - 0.02, f'{v:.3f}', ha='center', fontweight='bold')
+
+            # RMSE
+            axes[1].bar(comparison_data['Modèle'], comparison_data['RMSE'], 
+                        color=['steelblue', 'green', 'coral'])
+            axes[1].set_ylabel('RMSE (véhicules/heure)')
+            axes[1].set_title('Erreur quadratique moyenne')
+            for i, v in enumerate(comparison_data['RMSE']):
+                axes[1].text(i, v + 20, f'{v:.0f}', ha='center', fontweight='bold')
+
+            plt.tight_layout()
+            st.pyplot(fig)
+
+            # ============================================
+            # IMPORTANCE DES VARIABLES
+            # ============================================
+
+            st.header("🔑 Top 10 des variables les plus influentes")
+
+            # Données d'importance (issues de XGBoost)
+            importance_data = pd.DataFrame({
+                'Variable': ['hour_cos', 'snow_cat', 'snow', 'traffic_lag_1', 
+                            'is_rush_hour', 'traffic_lag_24', 'rain', 'weekday',
+                            'hour', 'is_weekend'],
+                'Importance': [44.3, 15.1, 10.7, 6.8, 3.8, 3.3, 2.3, 2.2, 2.1, 1.8]
+            })
+
+            fig, ax = plt.subplots(figsize=(10, 6))
+            colors = plt.cm.Blues_r(np.linspace(0.3, 0.9, len(importance_data)))
+            ax.barh(importance_data['Variable'], importance_data['Importance'], color=colors)
+            ax.set_xlabel('Importance (%)')
+            ax.set_title('Importance des variables - XGBoost')
+            ax.invert_yaxis()
+            plt.tight_layout()
+            st.pyplot(fig)
+
+            st.markdown("""
+            **💡 Interprétation** : 
+            - L'heure (`hour_cos`) est le facteur dominant (44%)
+            - La neige a un impact majeur (25% cumulé)
+            - Le trafic passé (`traffic_lag_1`) confirme l'inertie
+            """)
+
+        st.markdown("---")
+        with st.expander("Lire plus sur le projet", expanded=False):
+            # Affichage d'une image d'en-tête
+            header_img = Image.open('assets/projectmap.png')
+            st.image(header_img, use_container_width=True)
+
+            # En savoir plus
+            st.markdown("---")
+            with st.expander("En savoir plus la zone d'étude", expanded=True):
+                st.subheader("📍 Zone d'étude : Minneapolis-Saint Paul")
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    
+                    # Création d'une carte interactive
+                    m = folium.Map(location=[44.95, -93.20], zoom_start=10)
+
+                    # Ajout des marqueurs
+                    folium.Marker(
+                        [44.95, -93.20],
+                        popup='Minneapolis',
+                        icon=folium.Icon(color='blue', icon='info-sign')
+                    ).add_to(m)
+
+                    folium.Marker(
+                        [44.94, -93.09],
+                        popup='Saint Paul',
+                        icon=folium.Icon(color='green', icon='info-sign')
+                    ).add_to(m)
+
+                    folium.Marker(
+                        [44.95, -93.15],
+                        popup='Station ATR 301',
+                        icon=folium.Icon(color='red', icon='car')
+                    ).add_to(m)
+
+                    # Affichage
+                    folium_static(m)
+
+                with col2:
+                    st.markdown("""
+                    **Pays** : États-Unis 🇺🇸 
+                    **État** : Minnesota (MN)  
+                    **Région** : Midwest américain  
+                    **Comtés** : Hennepin (Minneapolis) • Ramsey (Saint Paul)  
+                    **Population (aire métro)** : 3,69 millions d'habitants (2023)  
+                    **Superficie métropolitaine** : 21 632 km² 
+                    **Villes principales :**
+                        - **Minneapolis** : 429 954 hab. ("City of Lakes")
+                        - **Saint Paul** : 311 527 hab. ("Capital City")
+                        - **Twin Cities** : 741 481 hab. 
+                    """)
+                    st.markdown("---")
+                    st.markdown("""L'Interstate 94 est un axe autoroutier majeur du Midwest américain, reliant les villes jumelles de Minneapolis et Saint Paul dans l'État du Minnesota. Cette région métropolitaine, qui compte près de 3,7 millions d'habitants, constitue la 16ᵉ aire urbaine des États-Unis.
+                            Le tronçon étudié s'étend sur environ 40 kilomètres entre les deux centres urbains, traversant à la fois des zones résidentielles, commerciales et industrielles. La station de mesure ATR 301, située à mi-chemin, enregistre en continu le volume horaire de trafic en direction ouest depuis 2012.
+                            Le climat continental du Minnesota, caractérisé par des hivers rigoureux (jusqu'à -20°C) et des chutes de neige fréquentes (jusqu'à 1,5 m par an), influence significativement les comportements de mobilité. Notre modèle de prédiction intègre ces spécificités locales pour fournir des estimations précises du volume de trafic.
+                            """)
+                
+                st.subheader("🛣️ L'Interstate 94")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("""
+                    **Caractéristiques techniques**
+                    - Longueur totale : 2 585 km
+                    - Tronçon Minnesota : 447 km
+                    - Tronçon étudié : 40 km
+                    - Voies : 4 à 6
+                    - Mise en service : 1961
+                    """)
+
+                with col2:
+                    st.markdown("""
+                    **Trafic**
+                    - Trafic journalier : jusqu'à 170 000 véh/jour
+                    - Heures de pointe : 7h-9h et 16h-18h
+                    - Pic maximum : 7 200 véh/heure
+                    - Station ATR 301 (MnDOT)
+                    """)
+
+            #=======================problematique & contexte & objectif ====================================
+
+            st.markdown("## ")
+            header(n=2,text = "Contexte - Problématique - Objectifs")
+            st.markdown(" ")
+            st.markdown("""La croissance urbaine engendre une augmentation du trafic routier, source d'embouteillages, de pollution et de perte de temps. Dans les métropoles comme Minneapolis-Saint Paul, l'Interstate 94 supporte plus de 170 000 véhicules par jour. Les initiatives Smart City exploitent les données et le machine learning pour anticiper les flux et optimiser la mobilité. 
+            Comment prédire le volume de trafic horaire sur un axe autoroutier majeur à partir de variables temporelles (heure, jour, mois) et météorologiques (température, précipitations, couverture nuageuse) ? La difficulté réside dans les relations non linéaires, les interactions entre variables, la saisonnalité et les événements exceptionnels comme les chutes de neige.
+            Développer un modèle performant (R² > 0,85) pour prédire le trafic horaire, enrichir les données par feature engineering (lags, cycles horaires), comparer plusieurs approches (Ridge, Random Forest, XGBoost), interpréter les résultats avec SHAP et PDP, et déployer une application Streamlit interactive. 
+            """)
+
+            with st.expander("Lire plus", expanded=True):
+                # Contexte
+                st.markdown("""
+                <div class="context-box">
+                    <h3 style="margin-top: 0;">🌍 Contexte</h3>
+                    <p>
+                    La croissance rapide des zones urbaines s'accompagne d'une augmentation 
+                    constante du volume de trafic routier, générant des embouteillages chroniques, 
+                    une pollution atmosphérique accrue et une perte de temps considérable pour 
+                    les usagers. Dans les métropoles américaines comme Minneapolis-Saint Paul, 
+                    l'Interstate 94 constitue un axe majeur de mobilité, reliant les deux villes 
+                    jumelles et supportant quotidiennement plus de <span class="highlight">170 000 véhicules</span>.
+                    </p>
+                    <p>
+                    Face à ces défis, les initiatives de <strong>"Smart City"</strong> (ville intelligente) 
+                    visent à exploiter les données massives et les algorithmes de machine 
+                    learning pour anticiper les flux de circulation, optimiser la gestion du 
+                    réseau routier et informer les citoyens en temps réel.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Problématique
+                st.markdown("""
+                <div class="problem-box">
+                    <h3 style="margin-top: 0;">🎯 Problématique</h3>
+                    <p>
+                    <strong>Comment prédire le volume de trafic horaire sur un axe autoroutier majeur 
+                    à partir de variables temporelles et météorologiques ?</strong>
+                    </p>
+                    <p>La complexité réside dans plusieurs facteurs :</p>
+                    <ul>
+                        <li><strong>Non-linéarité</strong> : l'effet de l'heure de pointe n'est pas simplement additif avec celui de la météo ;</li>
+                        <li><strong>Interactions</strong> : la pluie n'a pas le même impact à 8h qu'à 14h ;</li>
+                        <li><strong>Saisonnalité</strong> : les comportements varient selon les jours, week-ends et saisons ;</li>
+                        <li><strong>Événements exceptionnels</strong> : neige, tempêtes, manifestations perturbent les habitudes.</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
+
+
+                # Objectifs
+                st.markdown("""
+                <div class="objective-box">
+                    <h3 style="margin-top: 0;">🎯 Objectifs du projet</h3>
+                    <p><strong>Objectif principal :</strong> Développer un modèle prédictif avec une précision opérationnelle.</p>
+                    <p><strong>Objectifs spécifiques :</strong></p>
+                    <ol>
+                        <li>Explorer et préparer les données (nettoyage, gestion des anomalies)</li>
+                        <li>Enrichir les features (lags, moyennes mobiles, cycles horaires)</li>
+                        <li>Comparer Ridge, Random Forest et XGBoost</li>
+                        <li>Interpréter les résultats (SHAP, PDP)</li>
+                        <li>Déployer une application Streamlit interactive</li>
+                    </ol>
+                </div>
+                """, unsafe_allow_html=True)
+
+
+            # ============================================
+            # Sources de données
+            # ============================================
+
+            st.markdown("## ")
+            header(n=2,text = "📌 Sources de données")
+            with st.expander("", expanded=True):
+                
+                st.markdown("""
+                <div class="problem-box">
+                    <h3>  </h3>
+                    <p>
+                        Le jeu de données utilisé dans ce projet provient de deux sources principales : 
+                        le <strong>Minnesota Department of Transportation (MnDOT)</strong> pour les données de trafic 
+                        (station ATR 301 sur l'Interstate 94 Westbound) et <strong>OpenWeatherMap</strong> pour les 
+                        données météorologiques (température, précipitations, couverture nuageuse). 
+                        L'ensemble a été mis à disposition par l'UCI Machine Learning Repository 
+                        (dataset ID 492).
+                    </p>
+                    <p>
+                        La période initiale couvre octobre 2012 à septembre 2018 avec <span class="highlight">48 204 observations</span> 
+                        horaires. Après nettoyage (suppression des doublons, traitement des anomalies 
+                        de température à 0K et de pluie à 9831 mm) et restriction à la période la plus 
+                        complète (2015-2018), le jeu de données final comprend <span class="highlight">23 979 observations</span> 
+                        avec un taux de complétude de <span class="highlight">93,4%</span>.
+                    </p>
+                    <p>
+                        Les variables incluent la cible <code style="color:#FFD700;">traffic_volume</code> (volume horaire de trafic) 
+                        et des prédicteurs temporels (<code style="color:#FFD700;">date_time</code>) et météorologiques (<code style="color:#FFD700;">temp</code>, 
+                        <code style="color:#FFD700;">rain_1h</code>, <code style="color:#FFD700;">snow_1h</code>, <code style="color:#FFD700;">clouds_all</code>, <code style="color:#FFD700;">weather_main</code>, <code style="color:#FFD700;">weather_description</code>, 
+                        <code style="color:#FFD700;">holiday</code>). Par la suite, 15 nouvelles features ont été créées par 
+                        feature engineering (lags, moyennes mobiles, transformations cycliques, indicateurs).
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                src_img = Image.open('assets/sources.png')
+                st.image(src_img, use_container_width=True)
+                
+                st.markdown("""
+                ### 🔗 Accès aux données
+
+                Le jeu de données original est disponible publiquement sur :
+
+                - **UCI Machine Learning Repository** :  
+                [Metro Interstate Traffic Volume Dataset](https://archive.ics.uci.edu/ml/datasets/Metro+Interstate+Traffic+Volume)
+
+                - **Téléchargement direct** :  
+                ```python
+                from ucimlrepo import fetch_ucirepo
+                metro = fetch_ucirepo(id=492)
+                df = pd.concat([metro.data.features, metro.data.targets], axis=1)
+                            """)
+            #=============================================
+
+            st.markdown("##")
+
+            st.subheader("📋 Architecture du projet")
+
+            st.markdown("""
+            Le projet suit un pipeline complet de data science, de la collecte des données 
+            au déploiement de l'application.
+            """)
+
+            # Workflow visuel
+            col1, col2, col3, col4, col5 = st.columns(5)
+
+            with col1:
+                st.markdown("""
+                <div style="text-align: center;">
+                    <p style="font-size: 32px;">📊</p>
+                    <p style="font-weight: bold;">Collecte</p>
+                    <p style="font-size: 12px; color: gray;">Données trafic + météo</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col2:
+                st.markdown("""
+                <div style="text-align: center;">
+                    <p style="font-size: 32px;">🧹</p>
+                    <p style="font-weight: bold;">Nettoyage</p>
+                    <p style="font-size: 12px; color: gray;">Doublons, outliers, NaN</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col3:
+                st.markdown("""
+                <div style="text-align: center;">
+                    <p style="font-size: 32px;">⚙️</p>
+                    <p style="font-weight: bold;">Feature Engineering</p>
+                    <p style="font-size: 12px; color: gray;">Lags, cycles, indicateurs</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col4:
+                st.markdown("""
+                <div style="text-align: center;">
+                    <p style="font-size: 32px;">🤖</p>
+                    <p style="font-weight: bold;">Modélisation</p>
+                    <p style="font-size: 12px; color: gray;">Ridge, RF, XGBoost</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col5:
+                st.markdown("""
+                <div style="text-align: center;">
+                    <p style="font-size: 32px;">🚀</p>
+                    <p style="font-weight: bold;">Déploiement</p>
+                    <p style="font-size: 12px; color: gray;">Application Streamlit</p>
+                </div>
+                """, unsafe_allow_html=True)
 
     # ── P-PRO-2 : Performances ──
     elif PAGE == "📈  Performances & Résultats":
@@ -1355,7 +1739,7 @@ if MODE == "pro":
         mods = ["Ridge","Random Forest","XGBoost"]
         fig = go.Figure()
         fig.add_trace(go.Bar(name="Train",x=mods,y=[0.823,0.997,0.996],
-                              marker_color=f"{BLEU}55",text=["0.823","0.997","0.996"],textposition="inside"))
+                              marker_color="rgba(30, 111, 217, 0.33)",text=["0.823","0.997","0.996"],textposition="inside"))
         fig.add_trace(go.Bar(name="Validation",x=mods,y=[0.891,0.982,0.981],
                               marker_color=BLEU,text=["0.891","0.982","0.981"],textposition="inside"))
         fig.add_trace(go.Bar(name="Test",x=mods,y=[0.903,0.989,0.988],
@@ -1387,7 +1771,7 @@ if MODE == "pro":
                 sj["jour"] = pd.to_datetime(sj["datetime"]).dt.strftime("%a\n%d/%m")
                 fig = go.Figure()
                 fig.add_trace(go.Bar(name="Réel",x=sj["jour"],y=sj["traffic"],
-                                      marker_color=f"{BLEU}66"))
+                                      marker_color="rgba(30, 111, 217, 0.4)"))
                 fig.add_trace(go.Bar(name="Prédit (RF)",x=sj["jour"],y=sj["pred_rf"],
                                       marker_color=VERT,opacity=.85))
                 fig.update_layout(barmode="group",height=280,
@@ -1400,70 +1784,65 @@ if MODE == "pro":
 
     # ── P-PRO-3 : Prédiction Interactive (Pro) ──
     elif PAGE == "🔮  Prédiction Interactive":
-        st.markdown(f"""<div style='margin-bottom:16px;'>
-          <h1 style='font-size:2rem;font-weight:700;color:var(--text-primary);margin:0;'>
-            Prédiction Interactive</h1>
-          <p style='color:var(--text-secondary);font-size:.95rem;margin-top:6px;'>
-            Estimez le volume de trafic en temps réel selon vos paramètres</p>
-        </div>""", unsafe_allow_html=True)
+        st.title("Prédiction Interactive")
+        st.markdown("Estimez le volume de trafic sur l'Interstate 94 en configurant les paramètres.")
+        st.markdown("---")
 
         ci,co = st.columns([1,1], gap="large")
-        with ci:
-            sh("⚙️ Conditions")
-            mod_p = st.selectbox("Modèle prédictif",
-                                  ["Random Forest (recommandé)","XGBoost (production)","Ridge (baseline)"])
-            st.markdown("**📅 Quand ?**")
-            dc1,dc2 = st.columns(2)
-            with dc1: date_p = st.date_input("Date",value=datetime(2018,7,3).date())
-            with dc2: h_p = st.slider("Heure",0,23,8,format="%dh")
 
+        with ci:
+            sh("⚙️ Paramètres")
+            mod_p = st.selectbox("Modèle prédictif", ["Random Forest","XGBoost","Ridge"])
+            st.markdown("**📅 Temporel**")
+            dc1,dc2 = st.columns(2)
+            with dc1: date_p = st.date_input("Date",value=datetime.now().date())
+            with dc2: h_p = st.slider("Heure",0,23,8,format="%dh")
             st.markdown("**🌤️ Météo**")
             mc1,mc2 = st.columns(2)
             with mc1:
-                temp_p  = st.slider("Température (°C)",-20,40,20)
-                rain_p  = st.slider("Pluie (mm/h)",0,60,0)
+                temp_p = st.slider("Température (°C)",-20,40,20)
+                rain_p = st.slider("Pluie (mm/h)",0,60,0)
             with mc2:
-                snow_p  = st.slider("Neige (mm/h)",0,30,0)
+                snow_p = st.slider("Neige (mm/h)",0,30,0)
                 cloud_p = st.slider("Nuages (%)",0,100,40)
-
-            st.markdown("**📈 Trafic récent**")
+            weather_p = st.selectbox("Condition météo",["Clear","Clouds","Rain","Snow","Mist","Thunderstorm","Haze","Fog"])
+            st.markdown("**📈 Contexte trafic**")
             lc1,lc2 = st.columns(2)
             with lc1:
-                l1  = st.number_input("Heure précédente",0,7500,3500)
-                l2  = st.number_input("Il y a 2h",0,7500,3400)
+                l1 = st.number_input("Trafic heure précédente",0,7500,3500)
+                l2 = st.number_input("Trafic il y a 2h",0,7500,3400)
             with lc2:
-                l3  = st.number_input("Il y a 3h",0,7500,3200)
+                l3 = st.number_input("Trafic il y a 3h",0,7500,3200)
                 l24 = st.number_input("Même heure hier",0,7500,3600)
-
-            btn_pro = st.button("🚀  Prédire maintenant", use_container_width=True, type="primary")
+            btn = st.button("🚀 Lancer la prédiction", use_container_width=True, type="primary")
 
         with co:
             sh("📊 Résultat")
-            if btn_pro:
+            if btn:
                 dt = datetime.combine(date_p,datetime.min.time())+timedelta(hours=h_p)
                 feat = {c:0.0 for c in COLS}
                 feat.update({"rain":float(rain_p),"snow":float(snow_p),"cloud":float(cloud_p),
-                             "hour":float(h_p),"day":float(dt.day),"weekday":float(dt.weekday()),
-                             "month":float(dt.month),"year":float(dt.year),
-                             "is_holiday":0.,"is_rush_hour":1. if h_p in range(7,10) or h_p in range(16,20) else 0.,
-                             "is_weekend":1. if dt.weekday()>=5 else 0.,
-                             "temp_c":float(temp_p),"rain_cat":1. if rain_p>0 else 0.,
-                             "snow_cat":1. if snow_p>0 else 0.,
-                             "hour_sin":np.sin(2*np.pi*h_p/24),"hour_cos":np.cos(2*np.pi*h_p/24),
-                             "day_sin":np.sin(2*np.pi*dt.weekday()/7),"day_cos":np.cos(2*np.pi*dt.weekday()/7),
-                             "month_sin":np.sin(2*np.pi*dt.month/12),"month_cos":np.cos(2*np.pi*dt.month/12),
-                             "traffic_lag_1":float(l1),"traffic_lag_2":float(l2),
-                             "traffic_lag_3":float(l3),"traffic_lag_24":float(l24)})
+                            "hour":float(h_p),"day":float(dt.day),"weekday":float(dt.weekday()),
+                            "month":float(dt.month),"year":float(dt.year),
+                            "is_holiday":0.,"is_rush_hour":1. if h_p in range(7,10) or h_p in range(16,20) else 0.,
+                            "is_weekend":1. if dt.weekday()>=5 else 0.,
+                            "temp_c":float(temp_p),"rain_cat":1. if rain_p>0 else 0.,
+                            "snow_cat":1. if snow_p>0 else 0.,
+                            "hour_sin":np.sin(2*np.pi*h_p/24),"hour_cos":np.cos(2*np.pi*h_p/24),
+                            "day_sin":np.sin(2*np.pi*dt.weekday()/7),"day_cos":np.cos(2*np.pi*dt.weekday()/7),
+                            "month_sin":np.sin(2*np.pi*dt.month/12),"month_cos":np.cos(2*np.pi*dt.month/12),
+                            "traffic_lag_1":float(l1),"traffic_lag_2":float(l2),
+                            "traffic_lag_3":float(l3),"traffic_lag_24":float(l24)})
                 for c in COLS:
                     if "lag" in c and feat.get(c,None)==0.0: feat[c]=float(l1)
                     if "mean" in c and feat.get(c,None)==0.0: feat[c]=float((l1+l2+l3)/3)
 
                 Xp = pd.DataFrame([feat])[COLS]
                 nr = ["temp_c","rain","cloud","hour_sin","hour_cos","day_sin","day_cos",
-                      "month_sin","month_cos","traffic_lag_1","traffic_lag_2","traffic_lag_3","traffic_lag_24"]
-                mod_key = mod_p.split(" ")[0]
-                if mod_key=="Random":   pred=RF.predict(Xp)[0]
-                elif mod_key=="XGBoost": pred=XGB.predict(Xp)[0]
+                    "month_sin","month_cos","traffic_lag_1","traffic_lag_2","traffic_lag_3","traffic_lag_24"]
+
+                if mod_p=="Random Forest":   pred=RF.predict(Xp)[0]
+                elif mod_p=="XGBoost":       pred=XGB.predict(Xp)[0]
                 else:
                     Xs=Xp.copy()
                     try: Xs[nr]=SCALER.transform(Xs[nr])
@@ -1471,48 +1850,39 @@ if MODE == "pro":
                     pred=RIDGE.predict(Xs)[0]
 
                 pred = max(0,int(round(pred)))
-                if pred<1500:   css,emoji,niv,niv_c="","🟢","Fluide",VERT
-                elif pred<3500: css,emoji,niv,niv_c="w","🟡","Modéré",ORANGE
-                elif pred<5000: css,emoji,niv,niv_c="d","🔴","Dense",ROUGE
-                else:           css,emoji,niv,niv_c="d","🔴","Saturé",ROUGE
+                if pred<1500:   css,emoji,niv="","🟢","Faible"
+                elif pred<3500: css,emoji,niv="w","🟡","Modéré"
+                else:           css,emoji,niv="d","🔴","Élevé"
 
                 st.markdown(f"""<div class='pred-box {css}'>
-                  <div class='pred-val'>{pred:,}</div>
-                  <div style='color:var(--text-secondary);font-size:.95rem;margin-top:6px;'>véhicules / heure</div>
-                  <div style='margin-top:14px;font-size:1.1rem;font-weight:700;color:{niv_c};'>
-                    {emoji} Trafic {niv}</div>
-                  <div style='font-size:.8rem;color:var(--text-muted);margin-top:6px;'>
-                    {dt.strftime('%A %d %B %Y')} à {h_p:02d}h00</div>
+                <div class='pred-val'>{pred}</div>
+                <div style='color:var(--text-secondary);font-size:.95rem;margin-top:6px;'>véhicules / heure</div>
+                <div style='margin-top:12px;font-size:1.05rem;font-weight:600;'>{emoji} Trafic {niv}</div>
+                <div style='font-size:.8rem;color:var(--text-secondary);margin-top:6px;'>
+                    {dt.strftime('%A %d %B %Y')} à {h_p:02d}h · {mod_p}</div>
                 </div>""", unsafe_allow_html=True)
 
-                # Jauge
-                fig = go.Figure(go.Indicator(
-                    mode="gauge+number",value=pred,
-                    title={"text":"Volume prédit (véh/h)","font":{"size":13,"color":T_SECONDARY}},
-                    number={"font":{"color":T_PRIMARY}},
-                    gauge={"axis":{"range":[0,7500],"tickcolor":T_SECONDARY},
-                           "bar":{"color":BLEU},
-                           "bgcolor":BG_CARD,
-                           "bordercolor":GRID_COLOR,
-                           "steps":[{"range":[0,1500],"color":f"{VERT}22"},
-                                     {"range":[1500,3500],"color":f"{ORANGE}22"},
-                                     {"range":[3500,7500],"color":f"{ROUGE}22"}],
-                           "threshold":{"line":{"color":ROUGE,"width":3},"value":5500}}))
-                fig.update_layout(height=220,paper_bgcolor=BG_CARD,
-                                  font=dict(color=T_SECONDARY),
-                                  margin=dict(t=40,b=0,l=20,r=20))
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                fig = go.Figure(go.Indicator(mode="gauge+number",value=pred-2,
+                    title={"text":"Volume prédit (véh/h)","font":{"size":13}},
+                    gauge={"axis":{"range":[0,7500]},"bar":{"color":BLEU},
+                        "steps":[{"range":[0,1500],"color":"#DCFCE7"},
+                                    {"range":[1500,3500],"color":"#FEF9C3"},
+                                    {"range":[3500,7500],"color":"#FEE2E2"}],
+                        "threshold":{"line":{"color":ROUGE,"width":3},"value":5500}}))
+                fig.update_layout(height=220,margin=dict(t=40,b=0,l=20,r=20))
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Profil 24h
-                sh("Prévision sur 24h")
-                p24=[]
+                sh("Profil 24h simulé")
+                p24 = []
                 for h in range(24):
                     f2=feat.copy(); f2["hour"]=float(h)
                     f2["hour_sin"]=np.sin(2*np.pi*h/24); f2["hour_cos"]=np.cos(2*np.pi*h/24)
                     f2["is_rush_hour"]=1. if h in range(7,10) or h in range(16,20) else 0.
                     X2=pd.DataFrame([f2])[COLS]
-                    if mod_key=="Random":   pv=RF.predict(X2)[0]
-                    elif mod_key=="XGBoost": pv=XGB.predict(X2)[0]
+                    if mod_p=="Random Forest": pv=RF.predict(X2)[0]
+                    elif mod_p=="XGBoost":     pv=XGB.predict(X2)[0]
                     else:
                         try: X2[nr]=SCALER.transform(X2[nr])
                         except: pass
@@ -1520,28 +1890,25 @@ if MODE == "pro":
                     p24.append({"h":h,"p":max(0,pv)})
                 df24=pd.DataFrame(p24)
                 fig2=go.Figure()
-                fig2.add_vrect(x0=7,x1=9,fillcolor=ORANGE,opacity=.12,annotation_text="Matin")
-                fig2.add_vrect(x0=16,x1=19,fillcolor=VERT,opacity=.12,annotation_text="Soir")
+                fig2.add_vrect(x0=7,x1=9,fillcolor=ORANGE,opacity=.12)
+                fig2.add_vrect(x0=16,x1=19,fillcolor=VERT,opacity=.12)
                 fig2.add_trace(go.Scatter(x=df24["h"],y=df24["p"],mode="lines+markers",
-                                           line=dict(color=BLEU,width=2.5),marker=dict(size=6),
-                                           fill="tozeroy",fillcolor=f"{BLEU}18"))
-                fig2.add_vline(x=h_p,line_dash="dash",line_color=ROUGE,
-                                annotation_text=f"{h_p}h",
-                                annotation_font_color=ROUGE)
-                fig2.update_layout(height=230,
-                                   xaxis=dict(tickvals=list(range(0,24,2)),gridcolor=GRID_COLOR,
-                                               color=T_SECONDARY,title="Heure"),
-                                   yaxis=dict(gridcolor=GRID_COLOR,color=T_SECONDARY,title="Trafic (véh/h)"),
-                                   **{k:v for k,v in plo().items() if k not in ["xaxis","yaxis"]},
-                                   showlegend=False)
+                                        line=dict(color=BLEU,width=2.5),marker=dict(size=6),
+                                        fill="tozeroy",fillcolor="rgba(30,111,217,0.08)"))
+                fig2.add_vline(x=h_p,line_dash="dash",line_color=ROUGE,annotation_text=f"{h_p}h")
+                fig2.update_layout(height=220,xaxis=dict(tickvals=list(range(0,24,2)),gridcolor="#F1F5F9",title="Heure"),
+                                    yaxis=dict(gridcolor="#F1F5F9",title="Trafic prédit"),
+                                    **{k:v for k,v in plo().items() if k not in ["xaxis","yaxis"]},showlegend=False)
                 st.plotly_chart(fig2, use_container_width=True)
-
             else:
                 st.markdown(f"""<div style='text-align:center;padding:80px 20px;color:var(--text-muted);'>
-                  <div style='font-size:3.5rem;'>🎛️</div>
-                  <div style='font-size:.95rem;margin-top:14px;'>
-                    Configurez les paramètres<br>puis cliquez sur <b>Prédire maintenant</b>
-                  </div></div>""", unsafe_allow_html=True)
+                <div style='font-size:3.5rem;'>🎛️</div>
+                <div style='font-size:.95rem;margin-top:14px;'>
+                    Configurez les paramètres<br>puis cliquez sur <b>Lancer la prédiction</b>
+                </div></div>""", unsafe_allow_html=True)
+
+
+
 
     #=========================
     # Appel de la fonction
@@ -2442,129 +2809,6 @@ elif PAGE == "📊  Exploration (EDA)":
         st.plotly_chart(fig, use_container_width=True)
         
         box("Variance intra-mensuelle très élevée et homogène — le mois seul n'explique qu'une fraction de la variabilité. Les facteurs fins (heure, jour) dominent largement.", "o")
-
-   
-    # ============================================
-    # FOOTER
-    # ============================================
-    st.markdown("---")
-    st.markdown("""
-    <div style="text-align: center; color: gray; font-size: 12px; padding: 10px;">
-        <p>📊 Analyse Exploratoire - FlowCast | Données : MnDOT & OpenWeatherMap</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════
-# P3 — FEATURE ENGINEERING
-# ══════════════════════════════════════════════════════════════
-elif PAGE == "⚙️  Feature EngineeringV1":
-    st.title("Feature Engineering")
-    st.markdown("Construction de 52 variables prédictives depuis 9 variables brutes.")
-    st.markdown("---")
-
-    tab1,tab2,tab3 = st.tabs(["📦 Variables créées","📐 Encodage cyclique","⏱️ Lags & Moyennes mobiles"])
-
-    with tab1:
-        c1,c2,c3,c4 = st.columns(4)
-        with c1: kpi("Variables brutes","9","dataset original")
-        with c2: kpi("Variables finales","52","après FE complet","g")
-        with c3: kpi("Lags créés","20","4 vars × 4 horizons")
-        with c4: kpi("Moyennes mobiles","12","4 vars × 3 fenêtres")
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        cats = [
-            (BLEU,"Temporelles brutes",["hour","day","weekday","month","year","is_holiday","is_rush_hour","is_weekend"]),
-            (VERT,"Encodage cyclique",["hour_sin","hour_cos","day_sin","day_cos","month_sin","month_cos"]),
-            (ORANGE,"Météo transformée",["temp_c","rain_cat","snow_cat"]),
-            (ROUGE,"Lags trafic",["traffic_lag_1","traffic_lag_2","traffic_lag_3","traffic_lag_24"]),
-            ("#8B5CF6","Lags météo (4×4)",["rain_lag_1/2/3/24","snow_lag_1/2/3/24","temp_lag_1/2/3/24","cloud_lag_1/2/3/24"]),
-            ("#EC4899","Moyennes mobiles",["rain_mean_3/6/24","temp_mean_3/6/24","cloud_mean_3/6/24","snow_mean_3/6/24"]),
-        ]
-        cols = st.columns(3)
-        for i,(col,titre,vars_l) in enumerate(cats):
-            with cols[i%3]:
-                badges = "".join([f"<code style='background:var(--bg-card2);padding:2px 7px;border-radius:4px;"
-                                   f"font-size:.72rem;margin:2px;display:inline-block;'>{v}</code>" for v in vars_l])
-                st.markdown(f"""<div style='border:1px solid var(--border);border-radius:10px;padding:14px;
-                  margin-bottom:10px;border-top:3px solid {col};'>
-                  <div style='font-weight:600;font-size:.85rem;color:var(--text-primary);margin-bottom:8px;'>{titre}</div>
-                  <div>{badges}</div></div>""", unsafe_allow_html=True)
-
-        sh("Traitement des outliers — Température")
-        box("La variable <b>temp</b> contenait des valeurs ~2K (−271°C), erreurs capteur. Après filtrage (< 200K exclus), la distribution s'étend de −10°C à +35°C, cohérente avec le Minnesota.")
-        st.code("df = df[df['temp'] > 200]\ndf['temp_c'] = df['temp'] - 273.15", language="python")
-
-    with tab2:
-        sh("Problème : l'encodage entier brise la continuité cyclique")
-        c1,c2 = st.columns([1,1])
-        with c1:
-            st.markdown("""Un modèle recevant l'heure (0–23) en entier interprète la distance comme une différence algébrique :
-- |7h − 8h| = 1 ✅
-- |23h − 0h| = 23 ❌
-
-La transformation trigonométrique projette chaque variable sur un **cercle unitaire** :""")
-            st.code("""df['hour_sin'] = np.sin(2*np.pi*df['hour']/24)
-df['hour_cos'] = np.cos(2*np.pi*df['hour']/24)
-df['day_sin']  = np.sin(2*np.pi*df['weekday']/7)
-df['day_cos']  = np.cos(2*np.pi*df['weekday']/7)
-df['month_sin']= np.sin(2*np.pi*df['month']/12)
-df['month_cos']= np.cos(2*np.pi*df['month']/12)""", language="python")
-
-            df_check = pd.DataFrame({
-                "Heure":[0,6,12,18,23],
-                "sin":[f"{np.sin(2*np.pi*h/24):.3f}" for h in [0,6,12,18,23]],
-                "cos":[f"{np.cos(2*np.pi*h/24):.3f}" for h in [0,6,12,18,23]],
-                "Dist. encodage naïf":["23","—","—","—","23"],
-                "Dist. sin/cos":["≈0.27","—","—","—","≈0.27"],
-            })
-            st.dataframe(df_check, use_container_width=True, hide_index=True)
-            box("Sur le cercle, <b>0h et 23h sont voisins</b> (dist. euclidienne ≈0.27) contre 23 unités en encodage naïf.", "g")
-
-        with c2:
-            heures = np.arange(24)
-            trafic_norm = np.sin(np.pi*(heures-6)/12)*0.5+0.5
-            fig = go.Figure()
-            fig.add_trace(go.Scatterpolar(
-                r=np.ones(24), theta=heures*(360/24),
-                mode="markers+text", marker=dict(size=14,color=trafic_norm,
-                    colorscale="RdYlGn_r",colorbar=dict(title="Trafic\nrelatif",x=1.1)),
-                text=[f"{h}h" for h in heures],
-                textfont=dict(size=8), textposition="middle center", showlegend=False))
-            fig.add_trace(go.Scatterpolar(
-                r=[1,1], theta=[0, 23*(360/24)], mode="lines+markers",
-                line=dict(color=ORANGE,width=3,dash="dash"),
-                marker=dict(size=10,color=ORANGE), name="0h ↔ 23h (adjacents)"))
-            fig.update_layout(height=370,
-                polar=dict(radialaxis=dict(visible=False),angularaxis=dict(direction="clockwise",rotation=90)),
-                showlegend=True, margin=dict(t=20,b=0,l=40,r=90))
-            st.plotly_chart(fig, use_container_width=True)
-
-    with tab3:
-        sh("Importance des features — Validation par Random Forest")
-        fi = {"hour_cos":0.245,"traffic_lag_1":0.210,"traffic_lag_24":0.147,
-              "hour":0.118,"traffic_lag_2":0.075,"traffic_lag_3":0.030,
-              "snow_cat":0.026,"hour_sin":0.024,"snow":0.022,"is_rush_hour":0.021,
-              "weekday":0.017,"is_weekend":0.013,"day_sin":0.012,"rain":0.011,"rain_cat":0.009}
-        df_fi = pd.DataFrame(list(fi.items()),columns=["f","i"]).sort_values("i")
-        colors = [ROUGE if v>0.15 else BLEU if v>0.05 else "#CBD5E1" for v in df_fi["i"]]
-        fig = go.Figure(go.Bar(x=df_fi["i"],y=df_fi["f"],orientation="h",
-                                marker_color=colors,text=[f"{v:.3f}" for v in df_fi["i"]],textposition="outside"))
-        fig.update_layout(height=430,xaxis_title="Importance (Mean Decrease Impurity)",
-                          **plo(margin=dict(t=10,b=0,l=0,r=70)))
-        st.plotly_chart(fig, use_container_width=True)
-
-        sh("Justification des lags")
-        c1,c2 = st.columns(2)
-        with c1:
-            st.markdown("""Les lags capturent l'**effet mémoire** : une perturbation météo continue d'affecter le trafic bien après l'événement. Le lag 24h reflète la **saisonnalité journalière** — corrélation forte entre le trafic d'une heure et celui de la même heure la veille.""")
-        with c2:
-            lags_d = pd.DataFrame({
-                "Lag":["lag_1 (1h)","lag_2 (2h)","lag_3 (3h)","lag_24 (24h)"],
-                "Rôle":["Inertie immédiate","Tendance court terme","Fenêtre glissante","Saisonnalité journalière"],
-                "Import. RF":["21.0%","7.5%","3.0%","14.7%"]})
-            st.dataframe(lags_d, use_container_width=True, hide_index=True)
-
-        box("Variables temporelles + lags ≈ <b>75% de l'importance</b>. Météo ≈ <b>10%</b>. Le trafic est avant tout un phénomène <b>auto-corrélé et cyclique</b>.")
 
 # ══════════════════════════════════════════════════════════════
 # P3 — FEATURE ENGINEERING
@@ -4270,44 +4514,81 @@ elif PAGE == "📈  Évaluation & Performances":
 # ══════════════════════════════════════════════════════════════
 elif PAGE == "🔬  Interprétabilité SHAP":
     st.title("Interprétabilité — Méthode SHAP")
-    st.markdown("""SHAP (*SHapley Additive exPlanations*) décompose chaque prédiction en **contributions individuelles** de chaque feature, fondées sur la théorie des jeux coopératifs. La somme des valeurs SHAP égale exactement la différence entre la prédiction et la valeur de base (moyenne globale).""")
+ 
     st.markdown("---")
 
-    tab1,tab2,tab3 = st.tabs(["📊 Importance globale","⚡ Force Plots — Cas types","📉 Effets partiels (PDP)"])
+    # Introduction SHAP
+    sh("📖 Qu'est-ce que SHAP ?")
+    with st.expander("", expanded=True):
+        
+        st.markdown("""
+        ### L'origine : la valeur de Shapley
 
-    with tab1:
-        c1,c2 = st.columns([2,1])
-        with c1:
-            sh("Fondement théorique — Valeurs de Shapley")
-            st.markdown("""La valeur SHAP d'une feature *i* est la contribution marginale moyenne sur toutes les permutations possibles des autres features :
+        SHAP (SHapley Additive exPlanations) est une méthode d'interprétabilité inspirée de la **théorie des jeux coopératifs**. 
+        Dans les années 1950, le mathématicien Lloyd Shapley a proposé une façon équitable de répartir le gain d'une coalition 
+        entre ses membres, en fonction de leur contribution marginale.
 
-**φᵢ = Σ [f(S∪{i}) − f(S)] × poids(|S|)**
+        **Transposition à l'apprentissage automatique** : 
+        - Le **gain** = la prédiction du modèle
+        - Les **joueurs** = les variables d'entrée (features)
+        - La **valeur de Shapley** = contribution de chaque variable à la prédiction
 
-Propriétés garanties : **efficience** (Σφᵢ = prédiction − base), **symétrie**, **monotonicité** et **dummy** — ce que l'importance RF (MDI) ne garantit pas, notamment en présence de multicolinéarité.""")
-        with c2:
-            st.markdown("""**SHAP vs Importance RF**
+        ### Le principe mathématique
 
-| Critère | Imp. RF | SHAP |
-|---|---|---|
-| Biais multicolinéarité | ⚠️ | ✅ |
-| Interprétation locale | ❌ | ✅ |
-| Direction de l'effet | ❌ | ✅ |
-| Base théorique | Empirique | ✅ Axiomatique |""")
+        Pour une prédiction donnée, SHAP calcule la contribution de chaque variable en simulant toutes les coalitions possibles :
 
-        sh("SHAP Summary — Importance globale (Random Forest)")
-        shap_i = {"hour_cos":0.238,"traffic_lag_1":0.195,"traffic_lag_24":0.132,
-                   "hour":0.105,"traffic_lag_2":0.068,"traffic_lag_3":0.028,
-                   "snow_cat":0.024,"hour_sin":0.022,"snow":0.020,"is_rush_hour":0.018,
-                   "weekday":0.015,"is_weekend":0.011,"day_sin":0.011,"rain":0.010,"rain_cat":0.008}
-        df_sh = pd.DataFrame(list(shap_i.items()),columns=["f","s"]).sort_values("s")
-        colors_sh = [ROUGE if v>0.15 else BLEU if v>0.05 else "#CBD5E1" for v in df_sh["s"]]
-        fig = go.Figure(go.Bar(x=df_sh["s"],y=df_sh["f"],orientation="h",
-                                marker_color=colors_sh,
-                                text=[f"{v:.4f}" for v in df_sh["s"]],textposition="outside"))
-        fig.update_layout(height=430,xaxis_title="Valeur SHAP moyenne |φᵢ|",
-                          **plo(margin=dict(t=10,b=0,l=0,r=70)))
-        st.plotly_chart(fig, use_container_width=True)
+        > **Contribution d'une variable = Impact moyen de cette variable sur la prédiction, 
+        > en moyenne sur toutes les combinaisons possibles des autres variables.**
 
+        ### Les propriétés fondamentales
+
+        SHAP possède trois propriétés qui en font la méthode d'interprétabilité de référence :
+
+        | Propriété | Explication | Pourquoi c'est important |
+        |-----------|-------------|--------------------------|
+        | **Efficacité** | La somme des contributions SHAP + la valeur moyenne = la prédiction finale | On peut décomposer exactement chaque prédiction |
+        | **Symétrie** | Deux variables ayant le même effet reçoivent la même contribution | Pas de biais arbitraire |
+        | **Additivité** | Les contributions s'additionnent linéairement | On peut interpréter chaque variable indépendamment |
+        | **Nullité** | Une variable sans influence reçoit une contribution nulle | N'introduit pas de bruit dans l'interprétation |
+
+        ### SHAP dans ce projet
+
+        Nous utilisons **SHAP TreeExplainer**, une implémentation optimisée pour les modèles basés sur les arbres 
+        (Random Forest et XGBoost). Cette version est :
+        - **Rapide** : exploite la structure des arbres
+        - **Exacte** : calcule les valeurs SHAP sans approximation
+        - **Locale et globale** : explique chaque prédiction ET donne une vision d'ensemble
+
+        ### Comment interpréter les valeurs SHAP ?
+
+        | Valeur SHAP | Signification |
+        |-------------|---------------|
+        | **Positive** | La variable **augmente** la prédiction (pousse vers la droite) |
+        | **Négative** | La variable **diminue** la prédiction (pousse vers la gauche) |
+        | **Proche de 0** | La variable a peu ou pas d'influence sur cette prédiction |
+        | **Grande en valeur absolue** | La variable est très influente pour cette prédiction |
+
+        """)
+
+        sh("Importance globale — Random Forest vs XGBoost")
+        img_imp_glob = Image.open("assets/importance_rf.png")
+        st.image(img_imp_glob, caption="Importance globale : Random Forest")
+
+
+        #sh("Importance globale — Random Forest vs XGBoost")
+        img_imp_glob = Image.open("assets/imp_xgb.png")
+        st.image(img_imp_glob, caption="Importance globale : XGBoost")
+
+        st.markdown("""
+        Le Summary Plot SHAP révèle la hiérarchie et la direction des influences des variables sur la prédiction du trafic. La variable `hour_cos`, qui encode la cyclicité horaire, domine largement : ses valeurs élevées (rouge) sont associées à un impact négatif (réduction du trafic), correspondant aux heures de faible affluence, tandis que ses valeurs faibles (bleu) augmentent la prédiction pour les heures de pointe.
+
+        Le trafic de l'heure précédente (`traffic_lag_1`) apparaît comme le deuxième facteur d'influence majeur. Les points rouges (trafic élevé) se concentrent à droite de l'axe, indiquant qu'un volume important à l'heure précédente augmente la prédiction actuelle. Cette relation confirme l'inertie naturelle du phénomène. Le lag 24 heures (`traffic_lag_24`) présente une structure similaire mais avec une dispersion plus réduite, traduisant l'effet de saisonnalité journalière.
+
+        La variable `hour` (heure brute) présente une structure en deux groupes distincts, suggérant que le modèle distingue clairement les heures de pointe (impact positif) des heures creuses et nocturnes (impact négatif). Cette configuration valide la pertinence du feature engineering cyclique (`hour_sin`, `hour_cos`) qui offre une représentation plus continue du temps.
+
+        L'ensemble de ces observations confirme que XGBoost a appris des relations logiques et interprétables, où l'heure structure la mobilité, l'inertie assure la continuité, et la saisonnalité journalière stabilise les prédictions.
+        """)
+        
         sh("Effets directionnels")
         c1,c2 = st.columns(2)
         effets = [
@@ -4321,95 +4602,98 @@ Propriétés garanties : **efficience** (Σφᵢ = prédiction − base), **sym�
         for i,(c,feat,effet) in enumerate(effets):
             with (c1 if i%2==0 else c2):
                 st.markdown(f"""<div style='display:flex;gap:10px;margin-bottom:8px;align-items:center;'>
-                  <div style='width:10px;height:10px;border-radius:50%;background:{c};flex-shrink:0;'></div>
-                  <div style='font-size:.84rem;'><code>{feat}</code> {effet}</div>
+                <div style='width:10px;height:10px;border-radius:50%;background:{c};flex-shrink:0;'></div>
+                <div style='font-size:.84rem;'><code>{feat}</code> {effet}</div>
                 </div>""", unsafe_allow_html=True)
 
-    with tab2:
-        sh("Force Plots — Décomposition de prédictions individuelles")
-        st.markdown("Les barres rouges *poussent* la prédiction vers le haut, les bleues la *tirent* vers le bas. La somme algébrique = prédiction finale − valeur de base.")
+        st.markdown("---")
 
-        cas = st.selectbox("Cas à analyser", [
-            "Heure de pointe — mardi 8h (fort trafic)",
-            "Heure creuse — nuit à 4h (faible trafic)",
-            "Neige en heure de pointe — impact météo extrême"
-        ])
+        sh("Importance locale")
+        img_loc_creux = Image.open("assets/shap_xgb.png")
+        st.image(img_loc_creux, caption="Force Plot — Cas d'une heure creuse")
 
-        base_val = 3200
-        if "pointe" in cas and "Neige" not in cas:
-            titre,pred_val = "Heure de pointe — Mardi 8h", 5816
-            contribs = [("traffic_lag_1",+1243,"5200 véh."),("hour_cos",+892,"0.77 (8h)"),
-                         ("traffic_lag_24",+658,"5800 véh."),("is_rush_hour",+312,"1"),
-                         ("hour",+287,"8"),("weekday",+124,"1 (mardi)"),
-                         ("rain",-48,"0 mm"),("snow_cat",-12,"0")]
-            bxt = ("La prédiction (5 816 véh/h) dépasse la base value (3 200). <b>traffic_lag_1</b> (+1 243) et <b>hour_cos</b> (+892) dominent — inertie et position horaire expliquent l'essentiel. Météo favorable = contribution marginale.","g")
-        elif "creuse" in cas:
-            titre,pred_val = "Heure creuse — Nuit à 4h", 343
-            contribs = [("traffic_lag_1",-1287,"343 véh."),("hour_cos",-892,"-0.26 (4h)"),
-                         ("traffic_lag_24",-643,"893 véh."),("traffic_lag_2",-498,"307 véh."),
-                         ("hour",-412,"4"),("is_rush_hour",-180,"0"),
-                         ("is_weekend",+35,"0"),("temp_c",+20,"12°C")]
-            bxt = ("Prédiction (343 véh/h) bien en dessous de la base (3 200). Aucune variable météo n'intervient — réduction exclusivement due aux <b>facteurs temporels</b> et à l'inertie nocturne.","")
-        else:
-            titre,pred_val = "Neige en heure de pointe — 7h", 321
-            contribs = [("snow",-1842,"0.18 mm"),("snow_cat",-1156,"1"),
-                         ("traffic_lag_1",+823,"5816 véh."),("hour_cos",+612,"0.79 (7h)"),
-                         ("traffic_lag_24",+445,"6280 véh."),("is_rush_hour",+298,"1"),
-                         ("hour",+121,"7"),("temp_c",-180,"-8°C")]
-            bxt = ("Cas d'école : malgré tous les indicateurs d'une heure de pointe active, la prédiction chute à 321 véh/h. <b>La neige (0.18mm) domine tout</b> — confirme la sensibilité extrême des usagers aux conditions hivernales au Minnesota.","r")
+        sh("Force Plot — Cas d'une heure de pointe")
+        img_loc_pleine = Image.open("assets/shap_point.png")
+        st.image(img_loc_pleine, caption="Force Plot — Cas d'une heure de pointe")
 
-        st.markdown(f"### {titre}")
-        st.markdown(f"**Base value** : `{base_val}` · **Prédiction** : `{pred_val}` · **Δ** : `{pred_val-base_val:+}`")
-        pos = [(f,v,d) for f,v,d in contribs if v>0]
-        neg = [(f,v,d) for f,v,d in contribs if v<0]
-        max_abs = max(abs(v) for _,v,_ in contribs)
+        sh("Force Plot — Cas d'une heure creuse")
+        img_loc_pleine = Image.open("assets/shap_creux.png")
+        st.image(img_loc_pleine, caption="Force Plot — Cas d'une heure creuse")
 
-        c1,c2 = st.columns(2)
-        with c1:
-            st.markdown("**Contributions positives (↑)**")
-            for feat,val,data in sorted(pos,key=lambda x:-x[1]):
-                pct = abs(val)/max_abs*100
-                st.markdown(f"""<div style='margin:6px 0;'>
-                  <div style='display:flex;justify-content:space-between;font-size:.82rem;'>
-                    <span><code>{feat}</code> = {data}</span>
-                    <span style='color:{ROUGE};font-weight:600;'>+{val:,}</span></div>
-                  <div style='background:#FEE2E2;border-radius:3px;height:8px;margin-top:3px;'>
-                    <div style='background:{ROUGE};width:{pct:.0f}%;height:8px;border-radius:3px;'></div>
-                  </div></div>""", unsafe_allow_html=True)
-        with c2:
-            st.markdown("**Contributions négatives (↓)**")
-            for feat,val,data in sorted(neg,key=lambda x:x[1]):
-                pct = abs(val)/max_abs*100
-                st.markdown(f"""<div style='margin:6px 0;'>
-                  <div style='display:flex;justify-content:space-between;font-size:.82rem;'>
-                    <span><code>{feat}</code> = {data}</span>
-                    <span style='color:{BLEU};font-weight:600;'>{val:,}</span></div>
-                  <div style='background:#DBEAFE;border-radius:3px;height:8px;margin-top:3px;'>
-                    <div style='background:{BLEU};width:{pct:.0f}%;height:8px;border-radius:3px;'></div>
-                  </div></div>""", unsafe_allow_html=True)
+        sh("Force Plot — Cas d'une mauvaise méteo")
+        img_loc_pleine = Image.open("assets/shap_meteo.png")
+        st.image(img_loc_pleine, caption="Force Plot — Cas d'une mauvaise méteo")
 
-        tp = sum(v for _,v,_ in pos); tn = sum(abs(v) for _,v,_ in neg)
-        st.markdown(f"""<div style='margin:20px 0 8px;'>
-          <div style='font-size:.8rem;color:var(--text-secondary);margin-bottom:4px;'>Force résultante</div>
-          <div style='display:flex;height:20px;border-radius:4px;overflow:hidden;'>
-            <div style='background:{ROUGE};width:{tp/(tp+tn)*100:.0f}%;'></div>
-            <div style='background:{BLEU};width:{tn/(tp+tn)*100:.0f}%;'></div></div>
-          <div style='display:flex;justify-content:space-between;font-size:.76rem;color:var(--text-secondary);margin-top:3px;'>
-            <span>Contributions positives : +{tp:,.0f}</span>
-            <span>Prédiction : {pred_val:,} véh/h</span>
-            <span>Contributions négatives : -{tn:,.0f}</span>
-          </div></div>""", unsafe_allow_html=True)
-        box(bxt[0], bxt[1])
+        st.markdown("""
+        #### **Analyse du Force Plot pour une heure de pointe**
+                    
+        Le Force Plot SHAP illustre la décomposition de la prédiction pour une observation correspondant à une heure de pointe (7h-9h). La prédiction de base du modèle est d'environ 3 000 véhicules/heure. L'ensemble des variables contribue à augmenter cette prédiction de 2 500 véhicules pour atteindre une valeur finale de 5 500 véhicules/heure, cohérente avec un trafic dense sur l'Interstate 94.
 
-    with tab3:
-        sh("Effets partiels (PDP) — Impact marginal")
+        Les principales contributions positives proviennent de is_rush_hour (indicateur d'heure de pointe), de traffic_lag_1 (trafic élevé à l'heure précédente), et de hour_cos (position favorable dans le cycle horaire). L'absence de flèches bleues significatives confirme qu'aucun facteur défavorable (neige, pluie, température extrême) ne vient réduire le trafic à cet instant.
+
+        Cette visualisation valide le comportement attendu du modèle : pour une heure de pointe, toutes les conditions étant réunies, la prédiction atteint des niveaux élevés. La contribution dominante de l'indicateur is_rush_hour confirme que le modèle a bien appris l'importance de ces créneaux horaires dans la structuration du trafic.
+        """)
+
+        st.markdown("""
+        #### **Analyse du Force Plot pour une heure creuse (2h-4h)**
+
+        Le Force Plot pour une heure creuse illustre parfaitement la capacité du modèle à prédire les faibles volumes de trafic. La prédiction finale de 890 véhicules/heure, bien inférieure à la base value de 3 000 véhicules, est entièrement expliquée par des contributions négatives dominantes.
+
+        La principale contribution négative provient de traffic_lag_1 (343 véhicules à l'heure précédente), confirmant l'inertie du phénomène : un trafic déjà très faible à 3h se prolonge naturellement à 4h. traffic_lag_2 (307 véhicules deux heures avant) et traffic_lag_24 (893 véhicules à la même heure la veille) renforcent cette tendance baissière. La valeur de hour_cos (0,5) correspond à une position dans le cycle horaire défavorable aux déplacements, tandis que l'heure brute (4h) confirme qu'il s'agit d'une période de très faible activité.
+
+        Contrairement au cas de l'heure de pointe, aucune variable météo (neige, pluie) n'intervient dans cette réduction, qui est exclusivement due aux facteurs temporels et à l'inertie du trafic. Cette configuration est parfaitement cohérente avec la réalité du trafic nocturne sur l'Interstate 94
+        """)
+
+        st.markdown(""" 
+        #### **Analyse du Force Plot pour une situation de neige en heure de pointe**
+
+        Ce force plot illustre un cas d'école où une condition météorologique défavorable annule complètement les facteurs habituellement associés à un trafic dense. Malgré la présence de tous les indicateurs favorables (is_rush_hour = 1, hour = 7, traffic_lag_1 = 5 816, traffic_lag_24 = 6 280), la prédiction finale chute à seulement 321 véhicules/heure, soit 2 679 véhicules en dessous de la base value.
+
+        Les contributions positives (flèches rouges) proviennent des variables temporelles et des lags, reflétant le trafic dense observé avant l'arrivée de la neige. Cependant, les variables météo (snow et snow_cat) exercent une contribution négative si forte qu'elle domine l'ensemble des autres facteurs. Même une très faible quantité de neige (0,18 mm) suffit à activer cet effet, démontrant la sensibilité extrême des usagers aux conditions hivernales dans le Minnesota.
+
+        Ce comportement est parfaitement cohérent avec la réalité : une chute de neige, même modérée, conduit à une modification radicale des comportements de mobilité, avec des reports de déplacements et une baisse drastique du trafic. Le modèle capture ainsi une interaction complexe où l'effet de la neige surpasse l'influence de l'heure de pointe, validant sa capacité à intégrer des phénomènes météorologiques exceptionnels.
+        """)
+
+        st.markdown("---")
+
+        # ════════════════════════════════════════════════════════════
+        # SECTION 4 : SYNTHÈSE
+        # ════════════════════════════════════════════════════════════
+        sh("📝 Synthèse des enseignements SHAP")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("""
+            **✅ Ce que le modèle a bien appris**
+
+            - **L'heure structure la mobilité** : `hour_cos` est la variable la plus importante
+            - **Le trafic a une inertie** : `traffic_lag_1` capture la continuité temporelle
+            - **La neige bloque la circulation** : effet de seuil immédiat
+            - **Les heures de pointe augmentent le trafic** : `is_rush_hour` positif
+            """)
+
+        with col2:
+            st.markdown("""
+            **⚠️ Limites identifiées**
+
+            - **La pluie a un effet limité** : seule une forte pluie impacte le trafic
+            - **La température a un effet modéré** : secondaire par rapport à l'heure
+            - **Les événements exceptionnels** : peu représentés dans les données
+            """)
+
+        st.markdown("---")
+
+
+    sh("Effets partiels (PDP) — Impact marginal")
+    with st.expander("", expanded=True):
         st.markdown("Un PDP montre l'**effet moyen** d'une variable, toutes autres choses égales par ailleurs.")
         pdp_v = st.selectbox("Variable", ["Heure","Température (°C)","Pluie (mm/h)","traffic_lag_1"])
 
         if pdp_v == "Heure":
             xv = np.arange(24)
             yv = [600,400,300,250,220,350,1200,3800,4800,4200,4000,3900,
-                  3700,3600,3500,3400,4200,5200,5400,4800,3500,2200,1200,800]
+                    3700,3600,3500,3400,4200,5200,5400,4800,3500,2200,1200,800]
             xl = "Heure"; vr = [(7,9,ORANGE,"Pointe matin"),(16,19,VERT,"Pointe soir")]
         elif pdp_v == "Température (°C)":
             xv = np.linspace(-15,35,50)
@@ -4427,9 +4711,9 @@ Propriétés garanties : **efficience** (Σφᵢ = prédiction − base), **sym�
         fig = go.Figure()
         for x0,x1,c,txt in vr:
             fig.add_vrect(x0=x0,x1=x1,fillcolor=c,opacity=.12,
-                          annotation_text=txt,annotation_position="top left")
+                            annotation_text=txt,annotation_position="top left")
         fig.add_trace(go.Scatter(x=xv,y=yv,mode="lines",line=dict(color=BLEU,width=2.5),
-                                  fill="tozeroy",fillcolor="rgba(30,111,217,0.08)"))
+                                    fill="tozeroy",fillcolor="rgba(30,111,217,0.08)"))
         fig.update_layout(height=300,xaxis_title=xl,yaxis_title="Trafic prédit moyen (véh/h)",**plo())
         st.plotly_chart(fig, use_container_width=True)
 
@@ -4457,7 +4741,7 @@ elif PAGE == "🔮  Prédiction Interactive":
         mod_p = st.selectbox("Modèle prédictif", ["Random Forest","XGBoost","Ridge"])
         st.markdown("**📅 Temporel**")
         dc1,dc2 = st.columns(2)
-        with dc1: date_p = st.date_input("Date",value=datetime(2018,7,3).date())
+        with dc1: date_p = st.date_input("Date",value=datetime.now().date())
         with dc2: h_p = st.slider("Heure",0,23,8,format="%dh")
         st.markdown("**🌤️ Météo**")
         mc1,mc2 = st.columns(2)
@@ -4517,14 +4801,16 @@ elif PAGE == "🔮  Prédiction Interactive":
             else:           css,emoji,niv="d","🔴","Élevé"
 
             st.markdown(f"""<div class='pred-box {css}'>
-              <div class='pred-val'>{pred:,}</div>
+              <div class='pred-val'>{pred}</div>
               <div style='color:var(--text-secondary);font-size:.95rem;margin-top:6px;'>véhicules / heure</div>
               <div style='margin-top:12px;font-size:1.05rem;font-weight:600;'>{emoji} Trafic {niv}</div>
               <div style='font-size:.8rem;color:var(--text-secondary);margin-top:6px;'>
                 {dt.strftime('%A %d %B %Y')} à {h_p:02d}h · {mod_p}</div>
             </div>""", unsafe_allow_html=True)
 
-            fig = go.Figure(go.Indicator(mode="gauge+number",value=pred,
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            fig = go.Figure(go.Indicator(mode="gauge+number",value=pred-2,
                 title={"text":"Volume prédit (véh/h)","font":{"size":13}},
                 gauge={"axis":{"range":[0,7500]},"bar":{"color":BLEU},
                        "steps":[{"range":[0,1500],"color":"#DCFCE7"},
@@ -4570,135 +4856,173 @@ elif PAGE == "🔮  Prédiction Interactive":
 
 # ══════════════════════════════════════════════════════════════
 # P8 — CONCLUSIONS
-# ══════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
 elif PAGE == "📝  Conclusions & Perspectives":
-    st.title("Conclusions & Perspectives")
-    st.markdown("---")
+    st.title(" Discussion")
+    sh("🎯 Rappel des objectifs")
+    with st.expander("", expanded=True):
+        st.markdown("""
 
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: kpi("Meilleur R²","0.989","Random Forest · test","g")
-    with c2: kpi("RMSE Test","210 véh.","−66% vs Ridge","g")
-    with c3: kpi("MAPE Test","5.8%","Précision opérationnelle","g")
-    with c4: kpi("Features","52","depuis 9 brutes")
-    st.markdown("<br>", unsafe_allow_html=True)
+        Ce projet visait à développer un modèle de machine learning capable de prédire le volume de trafic 
+        horaire sur l'Interstate 94, l'axe majeur reliant Minneapolis à Saint Paul dans le Minnesota. 
+        Face à la croissance urbaine et ses cortèges d'embouteillages et de pollution, l'enjeu était de 
+        démontrer qu'un modèle non linéaire, enrichi par un feature engineering adapté, pouvait capturer 
+        la complexité des flux de circulation. La baseline était fixée à un R² de 0,85, seuil à partir 
+        duquel le modèle serait considéré comme opérationnellement pertinent.
+        """)
 
-    tab1,tab2,tab3 = st.tabs(["📌 Résultats & Discussion","⚠️ Limites","🌍 Perspectives & Ouagadougou"])
+    sh("📊 Synthèse des résultats")
+    with st.expander("", expanded=True):
+        st.markdown("""
+        Les objectifs sont largement dépassés. Le modèle Random Forest atteint un R² de 0,989 sur l'ensemble 
+        de test, soit 98,9% de la variance expliquée. L'erreur relative moyenne (MAPE) n'est que de 5,8%, 
+        ce qui signifie qu'en moyenne, la prédiction s'écarte de la réalité de moins de 6%. Ce niveau de 
+        performance est exceptionnel pour un problème de prédiction de trafic, où la variabilité est 
+        naturellement élevée. La comparaison avec la régression Ridge (R² = 0,903) montre que le gain 
+        apporté par l'approche non linéaire est considérable : près de 9 points de R² supplémentaires, 
+        soit une réduction de 66% de l'erreur quadratique moyenne. XGBoost, bien que très proche 
+        (R² = 0,988), est devancé de justesse par Random Forest.
 
-    with tab1:
-        c1,c2 = st.columns(2)
-        with c1:
-            sh("Enseignements principaux")
-            for c,titre,desc in [
-                (BLEU,"Dominance temporelle","Variables lag et encodage cyclique représentent ~75% de l'importance totale. Le trafic est avant tout un phénomène auto-corrélé et cyclique."),
-                (VERT,"Supériorité non-linéaire","Le bond Ridge→RF (+9.5pts R²) confirme que les relations trafic-météo-heure sont fondamentalement non-linéaires et discontinues."),
-                (ORANGE,"Valeur du feature engineering","Ridge atteint R²=0.903 grâce aux 52 features. La qualité des features prime sur la sophistication du modèle."),
-                (ROUGE,"Limites événements exceptionnels","Independence Day génère encore 17% d'erreur avec RF. Les événements non modélisés restent le principal angle mort."),
-            ]:
-                st.markdown(f"""<div style='display:flex;gap:12px;margin-bottom:14px;align-items:flex-start;'>
-                  <div style='min-width:4px;border-radius:4px;background:{c};align-self:stretch;'></div>
-                  <div><div style='font-weight:600;font-size:.88rem;color:var(--text-primary);margin-bottom:3px;'>{titre}</div>
-                  <div style='font-size:.82rem;color:var(--text-secondary);line-height:1.5;'>{desc}</div></div>
-                </div>""", unsafe_allow_html=True)
+        ### 🔍 Interprétation : pourquoi Random Forest surpasse Ridge ?
 
-        with c2:
-            sh("Recommandation de déploiement")
-            for sc,mod,c,det in [
-                ("Performance maximale","Random Forest",BLEU,"R²=0.989 · 98 MB"),
-                ("Production temps réel","XGBoost",VERT,"R²=0.988 · 4 MB · rapide"),
-                ("Interprétabilité requise","Ridge",GRIS,"Coefficients directs"),
-                ("Ressources très limitées","Ridge",GRIS,"Simple · léger"),
-            ]:
-                st.markdown(f"""<div style='display:flex;justify-content:space-between;align-items:center;
-                  border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;'>
-                  <div><div style='font-size:.78rem;color:var(--text-secondary);'>{sc}</div>
-                  <div style='font-weight:600;font-size:.9rem;color:var(--text-primary);'>{mod}</div></div>
-                  <div style='background:{c};color:white;border-radius:6px;
-                               padding:4px 10px;font-size:.72rem;font-weight:600;'>{det}</div>
-                </div>""", unsafe_allow_html=True)
+        La supériorité des modèles ensemblistes s'explique par leur capacité à capturer deux phénomènes 
+        que Ridge, par nature linéaire, ne peut traiter. D'une part, les **non-linéarités** : l'effet de 
+        la neige n'est pas proportionnel – une chute de 1 cm a un impact immédiat et majeur, tandis que 
+        l'ajout de neige supplémentaire n'aggrave que marginalement la situation. De même, le passage 
+        d'une heure creuse à une heure de pointe crée une rupture brutale que seule une approche non 
+        linéaire peut modéliser. D'autre part, les **interactions** : l'effet de la pluie n'est pas le 
+        même selon qu'elle survienne à 8h (heure de pointe) ou à 14h (heure creuse). Random Forest 
+        détecte automatiquement ces effets croisés, là où Ridge les ignore.""")
 
-            sh("Tableau comparatif final")
-            df_f = pd.DataFrame({"":["Ridge","RF","XGB"],
-                                  "R² Test":[0.903,0.989,0.988],"RMSE":[618,210,213],
-                                  "MAPE":["28%","5.8%","5.9%"],"Taille":["<1MB","98MB","4MB"],
-                                  "Linéaire":["✅","❌","❌"]}).set_index("")
-            st.dataframe(df_f, use_container_width=True)
+    sh("⚠️ Limites du projet")
+    with st.expander("", expanded=True):
+        st.markdown("""
+        Notre analyse présente plusieurs limites qu'il convient de mentionner. Sur le plan des données, 
+        la station de mesure est unique. Le modèle ne capture donc que le trafic sur un tronçon spécifique 
+        de l'I-94, ignorant les effets de réseau (report de trafic, congestion sur axes adjacents). 
+        De plus, la période d'étude s'arrête en 2018, soit il y a sept ans. Les comportements de mobilité 
+        ont évolué depuis, notamment avec la généralisation du télétravail post-COVID. Enfin, l'absence 
+        d'intégration des événements exceptionnels (accidents, travaux, manifestations) limite la 
+        capacité du modèle à gérer les situations anormales. Sur le plan méthodologique, la dépendance 
+        aux lags restreint l'horizon de prédiction au court terme (H+1, H+24). Une erreur sur le lag 1 
+        se propage aux prédictions suivantes, ce qui rend le modèle fragile pour des prévisions 
+        multi-pas.
+        """)
 
-    with tab2:
-        sh("Limites identifiées")
-        c1,c2 = st.columns(2)
-        limites = [
-            ("Données","Station unique","Une seule station ATR 301 — ne capture pas les dynamiques de réseau ni les effets de dérivation.",ORANGE),
-            ("Données","Période 2012–2018","Ne reflète pas les évolutions post-COVID des comportements de mobilité.",ORANGE),
-            ("Données","Événements absents","Incidents, travaux, manifestations ne sont pas modélisés — source d'erreurs ponctuelles importantes.",ROUGE),
-            ("Méthode","Dépendance aux lags","Horizon de prédiction limité au court terme. Sans lag récent fiable, la précision chute significativement.",ROUGE),
-            ("Méthode","Outliers","Les valeurs extrêmes restent difficiles à prédire précisément malgré l'ensemble d'arbres.",ORANGE),
-            ("Généralisation","Spécificité géographique","Transposition à d'autres villes requiert un réentraînement complet avec données locales.",GRIS),
-        ]
-        for i,(cat,titre,desc,c) in enumerate(limites):
-            with (c1 if i%2==0 else c2):
-                st.markdown(f"""<div style='border:1px solid var(--border);border-radius:10px;padding:14px;
-                  margin-bottom:10px;border-left:3px solid {c};'>
-                  <div style='font-size:.7rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;
-                               letter-spacing:.06em;margin-bottom:4px;'>{cat}</div>
-                  <div style='font-weight:600;font-size:.88rem;color:var(--text-primary);margin-bottom:5px;'>{titre}</div>
-                  <div style='font-size:.8rem;color:var(--text-secondary);line-height:1.5;'>{desc}</div>
-                </div>""", unsafe_allow_html=True)
+    sh("🚀 Perspectives d'amélioration")
+    with st.expander("", expanded=True):
+        st.markdown("""
 
-    with tab3:
-        sh("Perspectives d'amélioration")
-        for titre,prio,desc in [
-            ("🗓️ Jours fériés enrichis","Élevée","Variable par type de jour férié (national, régional, pont) pour réduire les erreurs ponctuelles."),
-            ("🌦️ Météo granulaire","Élevée","Prévisions météo horaires et alertes (verglas, tempête) pour anticiper les perturbations."),
-            ("🚨 Détection anomalies","Moyenne","Module d'incidents via API (accidents, travaux) activant des features dédiées."),
-            ("🔄 Réentraînement auto","Moyenne","Pipeline mensuel pour maintenir la précision face à l'évolution des comportements."),
-            ("🧠 Modèles séquentiels","Exploratoire","LSTM / Transformers temporels pour dépendances long terme au-delà des lags discrets."),
-        ]:
-            cp = ROUGE if prio=="Élevée" else ORANGE if prio=="Moyenne" else GRIS
-            st.markdown(f"""<div style='border:1px solid var(--border);border-radius:10px;padding:14px;
-              margin-bottom:10px;display:flex;gap:14px;'>
-              <div><div style='display:flex;align-items:center;gap:8px;margin-bottom:5px;'>
-                <span style='font-weight:600;font-size:.88rem;color:var(--text-primary);'>{titre}</span>
-                <span style='background:{cp};color:white;border-radius:20px;
-                             padding:2px 8px;font-size:.68rem;font-weight:600;'>{prio}</span></div>
-              <div style='font-size:.81rem;color:var(--text-secondary);line-height:1.5;'>{desc}</div></div>
-            </div>""", unsafe_allow_html=True)
+        Plusieurs axes d'amélioration se dessinent. Sur le plan technique, l'ajout de nouvelles features 
+        d'interaction (`rush_hour × rain`, `temp_c × is_weekend`) pourrait encore affiner les prédictions. 
+        L'exploration de modèles de deep learning, notamment LSTM ou Transformers, permettrait de 
+        capturer des dépendances temporelles plus longues (plusieurs jours) sans recourir à des lags 
+        explicites. Sur le plan des données, l'intégration de sources externes (calendrier des événements, 
+        alertes trafic en temps réel, données de capteurs supplémentaires sur le réseau) enrichirait 
+        considérablement le modèle. Enfin, le développement d'une version multi-sites, entraînée sur 
+        plusieurs stations simultanément, ouvrirait la voie à une véritable prédiction à l'échelle du 
+        réseau routier.""")
+        # Sous-section : Améliorations techniques
+        st.markdown("**📈 Améliorations techniques**")
 
-        sh("Adaptation au contexte de Ouagadougou (Burkina Faso)")
-        c1,c2 = st.columns(2)
-        with c1:
-            st.markdown("""**Modifications des features nécessaires**
-- ❌ Supprimer : `snow`, `snow_cat`, tous les lags neige
-- ✅ Intégrer la **saison des pluies** (juin–septembre)
-- ✅ Ajouter l'**harmattan** (nov–mars, impact visibilité)
-- ✅ Adapter les **heures de pointe** : 7h-9h, 12h-13h, 17h-19h
-- ✅ Intégrer les **heures de prière** (5 prières quotidiennes)
-- ✅ Ajouter **marchés hebdomadaires** et événements locaux""")
-        with c2:
-            st.markdown("""**Sources de données locales identifiées**
-- 📡 **ANAM** — Agence Nationale de la Météorologie
-- 🗺️ **OpenStreetMap** — réseau routier
-- 📊 **GRID3** — données de population et mobilité
-- 🛰️ **Google Traffic API** — densité en temps réel
-- 🚌 **SOTRACO** — transport en commun
+        tech_improvements = pd.DataFrame({
+            "Axe d'amélioration": [
+                "Nouvelles features",
+                "Modèles avancés",
+                "Optimisation fine",
+                "Données externes"
+            ],
+            "Description": [
+                "Interactions (rush_hour × rain), lags plus longs (168h)",
+                "LSTM, GRU, Transformers pour les séquences longues",
+                "GridSearch plus large, validation croisée temporelle",
+                "Événements (concerts, matchs), travaux routiers"
+            ]
+        })
+        st.dataframe(tech_improvements, use_container_width=True, hide_index=True)
 
-**Collecte recommandée** : 12 mois minimum
-pour capturer la saisonnalité complète.""")
-        box("L'adaptation à Ouagadougou représente un <b>projet pilote ambitieux</b> qui validerait la généralisabilité des méthodes développées aux villes en développement, où les enjeux de mobilité sont souvent plus critiques.", "g")
+        # Sous-section : Données
+        st.markdown("**📊 Améliorations des données**")
 
-        st.markdown(f"""<div style='background:{DARK};border-radius:12px;padding:28px;
-          text-align:center;margin-top:24px;'>
-          <div style='color:#F1F5F9;font-size:1rem;line-height:1.9;max-width:700px;margin:0 auto;'>
-            Ce projet démontre qu'un <b style='color:{VERT};'>feature engineering rigoureux</b> combiné
-            à des <b style='color:{BLEU};'>modèles d'ensemble non-linéaires</b> et une
-            <b style='color:{ORANGE};'>validation temporelle stricte</b> permettent d'atteindre
-            <b style='color:{ORANGE};'>R² = 0.989</b> sur la prédiction du trafic urbain,
-            ouvrant la voie à des systèmes intelligents de
-            <b style='color:{BLEU};'>gestion de flux en temps réel</b>.
-          </div>
-          <div style='color:var(--text-muted);font-size:.75rem;margin-top:14px;'>
-            Saidou Yameogo · Interstate 94 · Minneapolis-Saint Paul · 2024
-          </div></div>""", unsafe_allow_html=True)
+        data_improvements = pd.DataFrame({
+            "Axe": ["Multi-sites", "Données temps réel", "Historique enrichi", "Événements"],
+            "Bénéfice": [
+                "Vision réseau, effets de report",
+                "Prédiction opérationnelle",
+                "Meilleure saisonnalité",
+                "Gestion des pics exceptionnels"
+            ],
+            "Complexité": ["Élevée", "Moyenne", "Faible", "Moyenne"]
+        })
+        st.dataframe(data_improvements, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
         
+
+    sh("🌍 Adaptation au contexte burkinabè")
+    with st.expander("", expanded=True):
+        st.markdown("""
+            La transposition de ce modèle à Ouagadougou, capitale du Burkina Faso, est techniquement possible 
+            mais nécessiterait des adaptations substantielles. Les variables liées à la neige devraient être 
+            supprimées, tandis que la saison des pluies (mai à octobre) deviendrait un facteur clé, au même 
+            titre que l'harmattan, cette période de brume sèche qui réduit la visibilité. Les heures de pointe 
+            locales devraient être redéfinies (7h-9h, 12h-13h, 17h-19h), et de nouvelles variables intégrées : 
+            marchés hebdomadaires (ex: Rood Woko), heures de prière, ou encore vacances scolaires. 
+            Les sources de données existent : l'ANAM pour la météo, OpenStreetMap pour le réseau routier, 
+            GRID3 pour la densité de population, et potentiellement la qualité de l'air (WAQI) comme proxy 
+            du trafic. Un réentraînement complet sur des données locales serait indispensable, mais la 
+            méthodologie développée dans ce projet fournit un cadre solide pour une telle adaptation.
+        """)
+
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("""
+            **Variables à conserver**
+            - `hour_sin`, `hour_cos` (cyclicité universelle)
+            - `traffic_lag_1`, `traffic_lag_24` (inertie temporelle)
+            - `is_weekend`, `is_rush_hour` (à adapter)
+            - `temp_c` (fortes chaleurs à Ouaga)
+            - `rain` (saison des pluies)
+
+            **Nouvelles variables à intégrer**
+            - `rainy_season` (saison des pluies : mai-octobre)
+            - `harmattan` (brume sèche : nov-fév)
+            - `market_day` (marchés hebdomadaires)
+            - `mosque_hour` (affluence prières)
+            """)
+
+        with col2:
+            st.markdown("""
+            **Variables à supprimer**
+            - `snow`, `snow_cat`, `snow_mean_*` (inexistant au Burkina)
+
+            **Sources de données locales**
+            - **ANAM** : données météo Burkina
+            - **OpenStreetMap** : réseau routier
+            - **GRID3** : densité population
+            - **INSD** : recensements mobilité
+            - **WAQI** : qualité air (proxy trafic)
+            """)
+
+        st.markdown("---")
+
+    sh("🏆 Verdict final")
+    with st.expander("", expanded=True):
+        st.markdown("""
+        Le projet atteint ses objectifs. Le modèle Random Forest retenu (R² = 0,989, RMSE = 210 véh/h, 
+        MAPE = 5,8%) constitue une solution performante pour la prédiction du trafic sur l'Interstate 94. 
+        Il démontre qu'un feature engineering soigné (lags, encodages cycliques, indicateurs) associé à 
+        un modèle ensembliste permet de capturer la complexité des flux de circulation. L'application 
+        Streamlit développée offre une interface interactive permettant de visualiser les prédictions, 
+        de comprendre l'importance des variables via SHAP, et de simuler des scénarios "what-if". 
+        Ce travail ouvre la voie à des applications concrètes en matière de gestion du trafic, 
+        d'information des usagers et de planification urbaine.
+        """)
+    
+
+
 # ══════════════════════════════════════════════════════════════
 # Appel de la fonction
 add_footer()
