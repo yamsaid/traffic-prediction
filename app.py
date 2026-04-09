@@ -840,7 +840,7 @@ def nav_button(label, page_value):
             border-radius: 8px;
             margin: 5px 0;
             cursor: pointer;
-            text-align: center;
+            text-align: left;
             font-weight: 600;
             box-shadow: 0 2px 6px rgba(30,111,217,0.3);
             transition: all 0.3s ease;
@@ -928,85 +928,92 @@ def display_logo(variant="default", location="main"):
         </div>
         """, unsafe_allow_html=True)
     elif variant == "animated":
-        st.markdown("""
-        <style>
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
+        c1, c2 = st.columns([1,3])
+        with c1:
+            st.markdown("""
+            <style>
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
 
-        .logo-animated {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-        }
+            .logo-animated {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                cursor: pointer;
+                transition: transform 0.3s ease;
+            }
 
-        .logo-animated:hover {
-            transform: translateY(-2px);
-        }
+            .logo-animated:hover {
+                transform: translateY(-2px);
+            }
 
-        .logo-animated:hover .logo-icon-animated {
-            animation: pulse 0.5s ease;
-        }
+            .logo-animated:hover .logo-icon-animated {
+                animation: pulse 0.5s ease;
+            }
 
-        .logo-icon-animated {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            width: 55px;
-            height: 55px;
-            border-radius: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-            transition: all 0.3s ease;
-        }
+            .logo-icon-animated {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                width: 55px;
+                height: 55px;
+                border-radius: 15px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                transition: all 0.3s ease;
+            }
 
-        .logo-icon-animated span {
-            font-size: 28px;
-        }
+            .logo-icon-animated span {
+                font-size: 28px;
+            }
 
-        .logo-text-animated h1 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+            .logo-text-animated h1 {
+                margin: 0;
+                font-size: 28px;
+                font-weight: 700;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
 
-        .logo-text-animated p {
-            margin: 0;
-            font-size: 11px;
-            color: #6c757d;
-        }
-        </style>
+            .logo-text-animated p {
+                margin: 0;
+                font-size: 11px;
+                color: #6c757d;
+            }
+            </style>
 
-        <div class="logo-animated">
-            <div class="logo-icon-animated">
-                <span>📡</span>
+            <div class="logo-animated">
+                <div class="logo-icon-animated">
+                    <span>📡</span>
+                </div>
+                <div class="logo-text-animated">
+                    <h1>FlowCast</h1>
+                    <p>Prédiction intelligente du trafic urbain</p>
+                </div>
             </div>
-            <div class="logo-text-animated">
-                <h1>FlowCast</h1>
-                <p>Prédiction intelligente du trafic urbain</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
+            """, unsafe_allow_html=True)
+        with c2:
+            st.markdown("Prédiction du volume de trafic ")
     else:  # default
-        st.markdown("""
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: 60px; height: 60px; border-radius: 15px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
-                <span style="font-size: 32px;">📡</span>
+        c1, c2 = st.columns([1,3])
+        with c1:
+            st.markdown("""
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: 60px; height: 60px; border-radius: 15px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
+                    <span style="font-size: 32px;">📡</span>
+                </div>
+                <div>
+                    <h1 style="margin: 0; font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">FlowCast</h1>
+                    <p style="margin: 0; font-size: 12px; color: #6c757d;">Prédiction intelligente du trafic urbain</p>
+                </div>
             </div>
-            <div>
-                <h1 style="margin: 0; font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">FlowCast</h1>
-                <p style="margin: 0; font-size: 12px; color: #6c757d;">Prédiction intelligente du trafic urbain</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+        with c2:
+            st.markdown("Prédiction du volume de trafic urba")
 
 # Footer
 
@@ -1062,8 +1069,6 @@ def add_footer():
         unsafe_allow_html=True
         )
     
-
-
 # Chargement du CSS
 #load_css()
 
@@ -1116,11 +1121,6 @@ if st.session_state.mode is None:
       <h1 style='font-size:2.6rem;font-weight:700;color:var(--text-primary);margin:12px 0 6px;'>TrafficML</h1>
       <p style='font-size:1.1rem;color:var(--text-secondary);margin:0;'>
         Prédiction du Trafic Urbain · Interstate 94 · Minneapolis-Saint Paul</p>
-      <div style='display:flex;justify-content:center;gap:12px;margin-top:16px;flex-wrap:wrap;'>
-        <span style='background:{BLEU}22;color:{BLEU};border-radius:20px;padding:4px 14px;font-size:.78rem;font-weight:600;'>Random Forest · R²=0.989</span>
-        <span style='background:{VERT}22;color:{VERT};border-radius:20px;padding:4px 14px;font-size:.78rem;font-weight:600;'>RMSE = 210 véh/h</span>
-        <span style='background:{ORANGE}22;color:{ORANGE};border-radius:20px;padding:4px 14px;font-size:.78rem;font-weight:600;'>MAPE = 5.8%</span>
-      </div>
     </div>
     <hr style='border-color:var(--border);margin:32px 0 28px;'>
     <h2 style='text-align:center;font-size:1.3rem;font-weight:600;color:var(--text-primary);margin-bottom:6px;'>
@@ -1139,7 +1139,7 @@ if st.session_state.mode is None:
           <div style='font-size:1.2rem;font-weight:700;color:{BLEU};margin-bottom:10px;'>Mode Pédagogique</div>
           <div style='font-size:.85rem;color:var(--text-secondary);line-height:1.7;margin-bottom:20px;'>
             Pour les <b>étudiants, enseignants et chercheurs</b> qui souhaitent comprendre
-            la démarche complète de data science : exploration, preprocessing, modélisation,
+            la démarche complète du projet : exploration, preprocessing, modélisation,
             évaluation et interprétabilité.
           </div>
           <div style='text-align:left;font-size:.8rem;color:var(--text-secondary);margin-bottom:24px;'>
@@ -1158,6 +1158,7 @@ if st.session_state.mode is None:
         if st.button("🎓  Accéder au mode pédagogique", use_container_width=True,
                      key="btn_peda", type="primary"):
             st.session_state.mode = "pedagogique"
+            st.session_state.current_page = "accueil"  # Page d'atterrissage pour le mode pédagogique
             st.rerun()
 
     with c2:
@@ -1187,6 +1188,7 @@ if st.session_state.mode is None:
         if st.button("💼  Accéder au mode professionnel", use_container_width=True,
                      key="btn_pro"):
             st.session_state.mode = "pro"
+            st.session_state.current_page = "dashboard"  # Page d'atterrissage pour le mode pro
             st.rerun()
 
     # Footer
@@ -1286,7 +1288,7 @@ with st.sidebar:
 
     # État de la page courante
     if "current_page" not in st.session_state:
-        st.session_state.current_page = "🏠  Accueil"
+        st.session_state.current_page = "accueil"
     
     # Navigation selon le mode
     if MODE == "pedagogique":
@@ -1338,14 +1340,6 @@ with st.sidebar:
         st.session_state.mode = None
         st.rerun()
 
-    st.markdown(f"""
-    <div style='font-size:.68rem;color:#475569;line-height:1.8;margin-top:8px;'>
-      <b style='color:#94A3B8;'>Meilleur modèle</b><br>
-      Random Forest · R²=0.989<br>
-      RMSE=210 · MAPE=5.8%<br><br>
-      <b style='color:#94A3B8;'>Dataset</b><br>
-      48 204 obs. · 2012–2018
-    </div>""", unsafe_allow_html=True)
 
 if not OK:
     st.error(f"⚠️ Fichiers manquants : `{ERR}`")
@@ -1365,13 +1359,13 @@ if MODE == "pro":
         # PAGE D'ACCUEIL
         # ============================================
         # Utilisation
-        display_logo(variant="default", location="main")
-
+        #display_logo(variant="default", location="main")
+        st.markdown("<br>", unsafe_allow_html=True)
         st.title("Prédiction du volume de trafic urbain")
 
         paragraphe(classe="text-primary", style="text-align: center;", text="Smart City - Minneapolis-Saint Paul")
 
-        st.markdown("##")
+        st.markdown("---")
         st.markdown(" ")
         paragraphe(classe="custom-text",text="""Bienvenue sur l'application de prédiction du trafic urbain pour la zone de Minneapolis-Saint Paul.
         Ce projet vise à fournir des prédictions précises du volume de trafic horaire sur l'Interstate 94,
@@ -1780,12 +1774,9 @@ if MODE == "pro":
 
     # ── P-PRO-2 : Performances ──
     elif PAGE == "performance":
-        st.markdown(f"""<div style='margin-bottom:16px;'>
-          <h1 style='font-size:2rem;font-weight:700;color:var(--text-primary);margin:0;'>
-            Performances des modèles</h1>
-          <p style='color:var(--text-secondary);font-size:.95rem;margin-top:6px;'>
-            Comparaison Ridge · Random Forest · XGBoost sur le jeu de test</p>
-        </div>""", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.title("Resultats")
+        st.markdown("---")
 
         # Tableau synthétique
         df_comp = pd.DataFrame({
@@ -1871,8 +1862,9 @@ if MODE == "pro":
 
     # ── P-PRO-3 : Prédiction Interactive (Pro) ──
     elif PAGE == "prediction_pro":
+        st.markdown("<br>", unsafe_allow_html=True)
         st.title("Prédiction Interactive")
-        st.markdown("Estimez le volume de trafic sur l'Interstate 94 en configurant les paramètres.")
+        #st.markdown("Estimez le volume de trafic sur l'Interstate 94 en configurant les paramètres.")
         st.markdown("---")
 
         ci,co = st.columns([1,1], gap="large")
@@ -2012,7 +2004,7 @@ if PAGE == "accueil":
     # PAGE D'ACCUEIL
     # ============================================
     # Utilisation
-    display_logo(variant="default", location="main")
+    #display_logo(variant="default", location="main")
 
     st.title("Prédiction du volume de trafic urbain")
 
@@ -2435,8 +2427,9 @@ if PAGE == "accueil":
 # ══════════════════════════════════════════════════════════════
 
 elif PAGE == "eda":
-    st.title("📊 Exploration des données (EDA)")
-    st.markdown("Analyse exploratoire : distributions, patterns temporels et relations météo–trafic.")
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.title("Exploration des données (EDA)")
+    #st.markdown("Analyse exploratoire : distributions, patterns temporels et relations météo–trafic.")
     st.markdown("---")
 
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -2901,8 +2894,9 @@ elif PAGE == "eda":
 # P3 — FEATURE ENGINEERING
 # ══════════════════════════════════════════════════════════════
 elif PAGE == "feat":
+    st.markdown("<br>", unsafe_allow_html=True)
     st.title("⚙️ Feature Engineering")
-    st.markdown("Construction de **52 variables prédictives** depuis 9 variables brutes.")
+    #st.markdown("Construction de **52 variables prédictives** depuis 9 variables brutes.")
     st.markdown("---")
 
     tab1, tab2, tab3 = st.tabs([
@@ -3254,12 +3248,10 @@ elif PAGE == "feat":
 # ══════════════════════════════════════════════════════════════
 
 elif PAGE == "modeling":
- 
-    st.markdown(f"""<div style='margin-bottom:16px;'>
-      <h1 style='font-size:2rem;font-weight:700;color:var(--text-primary);margin:0;'>Modélisation</h1>
-      <p style='color:var(--text-secondary);font-size:.95rem;margin-top:6px;'>
-        Préparation des données · Ridge · Random Forest · XGBoost</p>
-    </div>""", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.title("🤖 Modélisation")
+    st.markdown("---")
+    
  
     # Barre de progression du pipeline
     etapes_pipe = ["Données brutes","Preprocessing","Feature Engineering","Split & Standardisation","Modélisation","Évaluation"]
@@ -4478,6 +4470,7 @@ elif PAGE == "modeling":
 # P5 — ÉVALUATION
 # ══════════════════════════════════════════════════════════════
 elif PAGE == "evaluation":
+    st.markdown("<br>", unsafe_allow_html=True)
     st.title("Évaluation & Performances")
     #st.markdown("Comparaison rigoureuse des trois modèles sur les ensembles train, validation et test.")
     st.markdown("---")
@@ -4600,6 +4593,7 @@ elif PAGE == "evaluation":
 # P6 — SHAP
 # ══════════════════════════════════════════════════════════════
 elif PAGE == "shap":
+    st.markdown("<br>", unsafe_allow_html=True)
     st.title("Interprétabilité — Méthode SHAP")
  
     st.markdown("---")
@@ -4817,8 +4811,9 @@ elif PAGE == "shap":
 # P7 — PRÉDICTION INTERACTIVE
 # ══════════════════════════════════════════════════════════════
 elif PAGE == "prediction_peda":
+    st.markdown("<br>", unsafe_allow_html=True)
     st.title("Prédiction Interactive")
-    st.markdown("Estimez le volume de trafic sur l'Interstate 94 en configurant les paramètres.")
+    #st.markdown("Estimez le volume de trafic sur l'Interstate 94 en configurant les paramètres.")
     st.markdown("---")
 
     ci,co = st.columns([1,1], gap="large")
@@ -4945,7 +4940,9 @@ elif PAGE == "prediction_peda":
 # P8 — CONCLUSIONS
     # ══════════════════════════════════════════════════════════════
 elif PAGE == "conclusion":
+    st.markdown("<br>", unsafe_allow_html=True)
     st.title(" Discussion")
+    st.markdown("---")
     sh("🎯 Rappel des objectifs")
     with st.expander("", expanded=True):
         st.markdown("""
