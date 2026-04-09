@@ -825,30 +825,37 @@ def formulaire(t,pos='center',c='v'):
               color:var(--text-primary);margin:8px 0;text-align:{pos};'>
               <b>{t}(x)</b>
             </div>""", unsafe_allow_html=True)
-
-# utils/shap_utils.py
-import shap
-
-@st.cache_data
-def compute_shap_values(model, X_sample):
-    """Calcule les valeurs SHAP pour un échantillon"""
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(X_sample)
-    return shap_values, explainer
-
-def display_summary_plot(shap_values, X_sample, feature_names):
-    """Affiche le summary plot SHAP"""
-    fig, ax = plt.subplots(figsize=(12, 8))
-    shap.summary_plot(shap_values, X_sample, feature_names=feature_names, show=False)
-    plt.tight_layout()
-    return fig
-
-def display_force_plot(explainer, shap_values, instance, instance_name="Prédiction"):
-    """Affiche un force plot pour une instance spécifique"""
-    fig = plt.figure()
-    shap.force_plot(explainer.expected_value, shap_values, instance, matplotlib=True, show=False)
-    return fig
-  
+def nav_button(label, page_value):
+    """Bouton de navigation avec style actif/inactif"""
+    is_active = st.session_state.current_page == page_value
+    
+    # Style du bouton selon son état
+    if is_active:
+        # Bouton actif : bleu, texte blanc
+        button_html = f"""
+        <div style="
+            background: linear-gradient(135deg, #1E6FD9, #0F4C9E);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            margin: 5px 0;
+            cursor: pointer;
+            text-align: center;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(30,111,217,0.3);
+            transition: all 0.3s ease;
+        ">
+            {label}
+        </div>
+        """
+        st.markdown(button_html, unsafe_allow_html=True)
+        # Pas de bouton cliquable (déjà sur la page)
+    else:
+        # Bouton inactif : cliquable
+        if st.button(label, key=page_value, use_container_width=True):
+            st.session_state.current_page = page_value
+            st.rerun()
+   
 JOURS_FR   = {"Monday":"Lundi","Tuesday":"Mardi","Wednesday":"Mercredi",
                "Thursday":"Jeudi","Friday":"Vendredi","Saturday":"Samedi","Sunday":"Dimanche"}
 MOIS_FR    = {1:"Jan",2:"Fév",3:"Mar",4:"Avr",5:"Mai",6:"Jun",
@@ -908,6 +915,8 @@ def display_logo(variant="default", location="main"):
             </div>
             <h3 style="margin: 0; color: #667eea;">FlowCast</h3>
             <p style="margin: 0; font-size: 10px; color: gray;">v1.0</p>
+            <div style='font-size:.65rem;color:#64748B;letter-spacing:.12em;margin-top:4px;'>
+            INTERSTATE 94 · MINNEAPOLIS</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1019,7 +1028,7 @@ def add_footer():
         ">
             <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 200px;">
-                    <h3 style="margin: 0 0 10px 0;">🚗 Smart Traffic</h3>
+                    <h3 style="margin: 0 0 10px 0;">📡 Smart Traffic</h3>
                     <p style="font-size: 12px; opacity: 0.8;">Prédiction du volume de trafic<br>par machine learning</p>
                 </div>
                 <div style="flex: 1; min-width: 200px;">
@@ -1082,7 +1091,7 @@ if st.session_state.mode is None:
     with st.sidebar:
         st.markdown(f"""
         <div style='text-align:center;padding:24px 0 16px;'>
-          <div style='font-size:2.8rem;'>🚗</div>
+          <div style='font-size:2.8rem;'>📡</div>
           <div style='font-size:1.3rem;font-weight:700;color:#F1F5F9;margin-top:6px;'>TrafficML</div>
           <div style='font-size:.65rem;color:#64748B;letter-spacing:.12em;margin-top:4px;'>
             INTERSTATE 94 · MINNEAPOLIS</div>
@@ -1103,7 +1112,7 @@ if st.session_state.mode is None:
     # ── Page de sélection ──
     st.markdown(f"""
     <div style='text-align:center;padding:40px 0 8px;'>
-      <div style='font-size:3.5rem;'>🚗</div>
+      <div style='font-size:3.5rem;'>📡</div>
       <h1 style='font-size:2.6rem;font-weight:700;color:var(--text-primary);margin:12px 0 6px;'>TrafficML</h1>
       <p style='font-size:1.1rem;color:var(--text-secondary);margin:0;'>
         Prédiction du Trafic Urbain · Interstate 94 · Minneapolis-Saint Paul</p>
@@ -1197,12 +1206,66 @@ if st.session_state.mode is None:
 MODE = st.session_state.mode   # "pedagogique" ou "pro"
 
 with st.sidebar:
+    #style du sidebar
+    # Style des segments
+    st.markdown("""
+    <style>
+    .segmented-control {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 10px 0;
+    }
+    .segment {
+        padding: 10px 15px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+    }
+    .segment:hover {
+        background: var(--bg-card-hover);
+        border-color: #667eea;
+    }
+    /* Ajout d'un point lumineux */
+    .segment.active::before {
+        content: "";
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background: red;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    .segment.active {
+        background: #1E6FD9;
+        color: white;
+        border-color: transparent;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+    .segment-group {
+        margin: 8px 0;
+    }
+    .segment-group-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        margin: 10px 0 5px 5px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # Logo + titre
     mode_badge_color = BLEU if MODE == "pedagogique" else VERT
     mode_badge_label = "🎓 Pédagogique" if MODE == "pedagogique" else "💼 Professionnel"
     st.markdown(f"""
     <div style='text-align:center;padding:18px 0 10px;'>
-      <div style='font-size:2.2rem;'>🚗</div>
+      <div style='font-size:2.2rem;'>📡</div>
       <div style='font-size:1.2rem;font-weight:700;color:#F1F5F9;'>TrafficML</div>
       <div style='font-size:.65rem;color:#94A3B8;letter-spacing:.1em;margin-top:3px;'>
         INTERSTATE 94</div>
@@ -1221,8 +1284,15 @@ with st.sidebar:
 
     st.markdown("<hr style='border-color:#2C3E50;margin:10px 0 12px;'>", unsafe_allow_html=True)
 
+    # État de la page courante
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = "🏠  Accueil"
+    
     # Navigation selon le mode
     if MODE == "pedagogique":
+        #============================
+        #version avec radio
+        #=======================
         PAGES_PEDA = [
             "🏠  Accueil",
             "📊  Exploration (EDA)",
@@ -1233,15 +1303,32 @@ with st.sidebar:
             "🔮  Prédiction Interactive",
             "📝  Conclusions & Perspectives",
         ]
-        PAGE = st.radio("", PAGES_PEDA, label_visibility="collapsed")
+        #PAGE = st.radio("", PAGES_PEDA, label_visibility="collapsed")
+
+        #=================================
+        #version avec boutons stylés
+        #=================================
+        PAGES_PEDA = [
+            ("🏠  Accueil","accueil"),
+            ("📊  Exploration (EDA)","eda"),
+            ("⚙️  Feature Engineering","feat"),
+            ("🤖  Modélisation","modeling"),
+            ("📈  Évaluation & Performances","evaluation"),
+            ("🔬  Interprétabilité SHAP","shap"),
+            ("🔮  Prédiction Interactive","prediction_peda"),
+            ("📝  Conclusions & Perspectives","conclusion"),
+        ]
+        for label, page_value in PAGES_PEDA: nav_button(label, page_value)
     else:
         PAGES_PRO = [
-            "🏠  Tableau de bord",
-            "📈  Performances & Résultats",
-            "🔮  Prédiction Interactive",
+            ("🏠  Tableau de bord","dashboard"),
+            ("📈  Performances & Résultats","performance"),
+            ("🔮  Prédiction Interactive","prediction_pro"),
         ]
-        PAGE = st.radio("", PAGES_PRO, label_visibility="collapsed")
+        #PAGE = st.radio("", PAGES_PRO, label_visibility="collapsed")
+        for label, page_value in PAGES_PRO: nav_button(label, page_value)
 
+    PAGE = st.session_state.current_page  
     st.markdown("<hr style='border-color:#2C3E50;margin:12px 0;'>", unsafe_allow_html=True)
 
     # Bouton changer de mode
@@ -1271,7 +1358,7 @@ if not OK:
 if MODE == "pro":
 
     # ── P-PRO-1 : Tableau de bord ──
-    if PAGE == "🏠  Tableau de bord":
+    if PAGE == "dashboard":
         # ══════════════════════════════════════════════════════════════
     
         # ============================================
@@ -1692,7 +1779,7 @@ if MODE == "pro":
                 """, unsafe_allow_html=True)
 
     # ── P-PRO-2 : Performances ──
-    elif PAGE == "📈  Performances & Résultats":
+    elif PAGE == "performance":
         st.markdown(f"""<div style='margin-bottom:16px;'>
           <h1 style='font-size:2rem;font-weight:700;color:var(--text-primary);margin:0;'>
             Performances des modèles</h1>
@@ -1780,10 +1867,10 @@ if MODE == "pro":
                                   legend=dict(orientation="h",y=1.08,font=dict(color=T_SECONDARY)))
                 st.plotly_chart(fig, use_container_width=True)
 
-        box("Le modèle Random Forest prédit avec une erreur moyenne de <b>210 véhicules/heure</b> — soit ~5.8% d'erreur relative. Il est opérationnellement fiable 6 jours sur 7, avec une légère dégradation le samedi (R²=0.977) due aux patterns de week-end atypiques.", "g")
+        #box("Le modèle Random Forest prédit avec une erreur moyenne de <b>210 véhicules/heure</b> — soit ~5.8% d'erreur relative. Il est opérationnellement fiable 6 jours sur 7, avec une légère dégradation le samedi (R²=0.977) due aux patterns de week-end atypiques.", "g")
 
     # ── P-PRO-3 : Prédiction Interactive (Pro) ──
-    elif PAGE == "🔮  Prédiction Interactive":
+    elif PAGE == "prediction_pro":
         st.title("Prédiction Interactive")
         st.markdown("Estimez le volume de trafic sur l'Interstate 94 en configurant les paramètres.")
         st.markdown("---")
@@ -1919,7 +2006,7 @@ if MODE == "pro":
 # ══════════════════════════════════════════════════════════════
 # P1 — ACCUEIL
 # ══════════════════════════════════════════════════════════════
-if PAGE == "🏠  Accueil":
+if PAGE == "accueil":
     
     # ============================================
     # PAGE D'ACCUEIL
@@ -2347,7 +2434,7 @@ if PAGE == "🏠  Accueil":
 # P2 — EDA
 # ══════════════════════════════════════════════════════════════
 
-elif PAGE == "📊  Exploration (EDA)":
+elif PAGE == "eda":
     st.title("📊 Exploration des données (EDA)")
     st.markdown("Analyse exploratoire : distributions, patterns temporels et relations météo–trafic.")
     st.markdown("---")
@@ -2813,7 +2900,7 @@ elif PAGE == "📊  Exploration (EDA)":
 # ══════════════════════════════════════════════════════════════
 # P3 — FEATURE ENGINEERING
 # ══════════════════════════════════════════════════════════════
-elif PAGE == "⚙️  Feature Engineering":
+elif PAGE == "feat":
     st.title("⚙️ Feature Engineering")
     st.markdown("Construction de **52 variables prédictives** depuis 9 variables brutes.")
     st.markdown("---")
@@ -3166,7 +3253,7 @@ elif PAGE == "⚙️  Feature Engineering":
 # P4 — MODÉLISATION
 # ══════════════════════════════════════════════════════════════
 
-elif PAGE == "🤖  Modélisation":
+elif PAGE == "modeling":
  
     st.markdown(f"""<div style='margin-bottom:16px;'>
       <h1 style='font-size:2rem;font-weight:700;color:var(--text-primary);margin:0;'>Modélisation</h1>
@@ -4390,7 +4477,7 @@ elif PAGE == "🤖  Modélisation":
 # ══════════════════════════════════════════════════════════════
 # P5 — ÉVALUATION
 # ══════════════════════════════════════════════════════════════
-elif PAGE == "📈  Évaluation & Performances":
+elif PAGE == "evaluation":
     st.title("Évaluation & Performances")
     #st.markdown("Comparaison rigoureuse des trois modèles sur les ensembles train, validation et test.")
     st.markdown("---")
@@ -4512,7 +4599,7 @@ elif PAGE == "📈  Évaluation & Performances":
 # ══════════════════════════════════════════════════════════════
 # P6 — SHAP
 # ══════════════════════════════════════════════════════════════
-elif PAGE == "🔬  Interprétabilité SHAP":
+elif PAGE == "shap":
     st.title("Interprétabilité — Méthode SHAP")
  
     st.markdown("---")
@@ -4729,7 +4816,7 @@ elif PAGE == "🔬  Interprétabilité SHAP":
 # ══════════════════════════════════════════════════════════════
 # P7 — PRÉDICTION INTERACTIVE
 # ══════════════════════════════════════════════════════════════
-elif PAGE == "🔮  Prédiction Interactive":
+elif PAGE == "prediction_peda":
     st.title("Prédiction Interactive")
     st.markdown("Estimez le volume de trafic sur l'Interstate 94 en configurant les paramètres.")
     st.markdown("---")
@@ -4857,7 +4944,7 @@ elif PAGE == "🔮  Prédiction Interactive":
 # ══════════════════════════════════════════════════════════════
 # P8 — CONCLUSIONS
     # ══════════════════════════════════════════════════════════════
-elif PAGE == "📝  Conclusions & Perspectives":
+elif PAGE == "conclusion":
     st.title(" Discussion")
     sh("🎯 Rappel des objectifs")
     with st.expander("", expanded=True):
