@@ -1,6 +1,6 @@
 ## README.md - TrafficML : Prédiction intelligente du trafic urbain
 
-```markdown
+
 # 📡 TrafficML - Prédiction du trafic urbain
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io)
@@ -210,4 +210,3 @@ Ce projet est distribué sous license MIT. Voir le fichier `LICENSE` pour plus d
 <div align="center">
   <sub>© 2026 — Africa TechUp Tour | Projet fil rouge — Data Scientist</sub>
 </div>
-```
