@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import joblib
 from PIL import Image
 import folium
-from streamlit_folium import folium_static
+#from streamlit_folium import folium_static
 
 warnings.filterwarnings("ignore")
 
@@ -2246,7 +2246,7 @@ if PAGE == "accueil":
             ).add_to(m)
 
             # Affichage
-            folium_static(m)
+            #folium_static(m)
 
         with col2:
             st.markdown("""
