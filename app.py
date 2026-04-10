@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore")
 # ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="TrafficML · Interstate 94",
-    page_icon="🚗",
+    page_icon="📡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -1035,7 +1035,7 @@ def add_footer():
         ">
             <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 200px;">
-                    <h3 style="margin: 0 0 10px 0;">📡 Smart Traffic</h3>
+                    <h3 style="margin: 0 0 10px 0;">📡 TrafficMl</h3>
                     <p style="font-size: 12px; opacity: 0.8;">Prédiction du volume de trafic<br>par machine learning</p>
                 </div>
                 <div style="flex: 1; min-width: 200px;">
@@ -1047,8 +1047,8 @@ def add_footer():
                 <div style="flex: 1; min-width: 200px;">
                     <h4 style="margin: 0 0 10px 0;">Contact</h4>
                     <p style="margin: 5px 0;"><a href="saidouyameogo3@gmail.com" style="color: #FFD700;">📧 saidouyameogo3@gmail.com</a></p>
-                    <p style="margin: 5px 0;"><a href="#" style="color: #FFD700;">🐙 GitHub</a></p>
-                    <p style="margin: 5px 0;"><a href="#" style="color: #FFD700;">🔗 LinkedIn</a></p>
+                    <p style="margin: 5px 0;"><a href="https://github.com/yamsaid" style="color: #FFD700;">🐙 GitHub</a></p>
+                    <p style="margin: 5px 0;"><a href="www.linkedin.com/in/saidou-yameogo-1684b6336" style="color: #FFD700;">🔗 LinkedIn</a></p>
                 </div>
             </div>
             <hr style="border-color: rgba(255,255,255,0.2); margin: 20px 0 10px 0;">
@@ -1062,7 +1062,7 @@ def add_footer():
             </div>
             <hr style="border-color: rgba(255,255,255,0.2); margin: 20px 0 10px 0;">
             <div style="text-align: center; font-size: 12px; opacity: 0.7;">
-                <p>© 2024 Projet Smart City - Tous droits réservés | Données : MnDOT & OpenWeatherMap</p>
+                <p>© 2026 Projet Smart City - Tous droits réservés | Données : MnDOT & OpenWeatherMap</p>
             </div>
         </div>
         """,
@@ -1270,7 +1270,7 @@ with st.sidebar:
       <div style='font-size:2.2rem;'>📡</div>
       <div style='font-size:1.2rem;font-weight:700;color:#F1F5F9;'>TrafficML</div>
       <div style='font-size:.65rem;color:#94A3B8;letter-spacing:.1em;margin-top:3px;'>
-        INTERSTATE 94</div>
+        INTERSTATE 94 · MINNEAPOLIS</div>
       <div style='background:{mode_badge_color}33;color:{mode_badge_color};border-radius:20px;
                    padding:3px 12px;font-size:.7rem;font-weight:600;margin-top:8px;display:inline-block;'>
         {mode_badge_label}</div>
@@ -1319,6 +1319,7 @@ with st.sidebar:
             ("🔬  Interprétabilité SHAP","shap"),
             ("🔮  Prédiction Interactive","prediction_peda"),
             ("📝  Conclusions & Perspectives","conclusion"),
+            ("ℹ️ A propos","about")
         ]
         for label, page_value in PAGES_PEDA: nav_button(label, page_value)
     else:
@@ -1326,6 +1327,7 @@ with st.sidebar:
             ("🏠  Tableau de bord","dashboard"),
             ("📈  Performances & Résultats","performance"),
             ("🔮  Prédiction Interactive","prediction_pro"),
+            ("ℹ️ A propos","about")
         ]
         #PAGE = st.radio("", PAGES_PRO, label_visibility="collapsed")
         for label, page_value in PAGES_PRO: nav_button(label, page_value)
@@ -1344,6 +1346,196 @@ with st.sidebar:
 if not OK:
     st.error(f"⚠️ Fichiers manquants : `{ERR}`")
     st.stop()
+
+#=============================================================
+#Page about
+#==============================================================
+# ══════════════════════════════════════════════════════════════
+# PAGE — ABOUT (À PROPOS)
+# ══════════════════════════════════════════════════════════════
+if st.session_state.current_page == "about":
+    st.markdown("<br>",unsafe_allow_html=True)
+    st.title("ℹ️ À propos")
+    #st.markdown("Contexte du projet, formation et auteur.")
+    st.markdown("---")
+    
+    # ============================================
+    # SECTION 1 : CONTEXTE FORMATION
+    # ============================================
+    sh("🎓 Contexte de formation")
+    
+    
+    with st.expander("",expanded=True):
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            Ce projet a été réalisé dans le cadre du **Programme Africa TechUp Tour 2025**, 
+            une initiative visant à former les talents africains aux métiers de la data et 
+            de l'intelligence artificielle.
+            
+            **Projet fil rouge — Option Data Scientist**
+            
+            Le projet fil rouge constitue l'aboutissement de la formation, permettant aux 
+            apprenants de mettre en pratique l'ensemble des compétences acquises :
+            
+            - Collecte et préparation des données
+            - Analyse exploratoire et visualisation
+            - Feature engineering
+            - Modélisation et évaluation
+            - Interprétabilité des modèles (SHAP)
+            - Déploiement d'application interactive (Streamlit)
+            
+            **Objectif pédagogique** : Démontrer la capacité à mener un projet data science 
+            de bout en bout, de la donnée brute à l'application déployée, en mobilisant 
+            des compétences techniques et méthodologiques.
+            """)
+        
+        with col2:
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #667eea10, #764ba210);
+                border-radius: 15px;
+                padding: 20px;
+                text-align: center;
+                border: 1px solid var(--border);
+            ">
+                <p style="font-size: 48px; margin: 0;">📡</p>
+                <p style="font-weight: 600; margin: 10px 0 0 0;">TrafficMl</p>
+                <p style="font-size: 12px; color: var(--text-muted);">Smart Traffic Prediction</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+    st.markdown("---")
+    
+    # ============================================
+    # SECTION 3 : TECHNOLOGIES UTILISÉES
+    # ============================================
+    sh("🛠️ Technologies utilisées")
+    with st.expander("",expanded=True):
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown("""
+            **📊 Data Processing**
+            - Python 3.9
+            - Pandas
+            - NumPy
+            """)
+        
+        with col2:
+            st.markdown("""
+            **🤖 Machine Learning**
+            - Scikit-learn
+            - XGBoost
+            - Joblib
+            """)
+        
+        with col3:
+            st.markdown("""
+            **📈 Visualisation**
+            - Matplotlib
+            - Seaborn
+            - Plotly
+            - SHAP
+            """)
+        
+        with col4:
+            st.markdown("""
+            **🚀 Déploiement**
+            - Streamlit
+            - Streamlit Cloud
+            """)
+        
+    st.markdown("---")
+    
+    
+    # ============================================
+    # SECTION 5 : AUTEUR
+    # ============================================
+    sh("👨‍💻 Auteur")
+    with st.expander("",expanded=True):
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                width: 100px;
+                height: 100px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto;
+            ">
+                <span style="font-size: 48px;">👨‍💻</span>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("""
+            ### Saïdou YAMEOGO
+            
+            Boursier Data Scientist — Africa TechUp Tour 2025
+            
+            **Compétences développées** :
+            - Python, Pandas, Scikit-learn, XGBoost
+            - Visualisation (Matplotlib, Seaborn, Plotly)
+            - Streamlit pour le déploiement d'applications
+            - SHAP pour l'interprétabilité
+            
+            **Contact** :
+            - 📧 saidouyameogo3@gmail.com
+            - 🔗 [LinkedIn](www.linkedin.com/in/saidou-yameogo-1684b6336)
+            - 🐙 [GitHub](https://github.com/yamsaid)
+            """)
+        
+    st.markdown("---")
+    
+    # ============================================
+    # SECTION 6 : REMERCIEMENTS
+    # ============================================
+    sh("🙏 Remerciements")
+    with st.expander("",expanded=True):
+        st.markdown("""
+        Ce projet n'aurait pu aboutir sans le soutien et l'encadrement de toute l'équipe de Africa TechUp Tour
+        
+        - **L'équipe Africa TechUp Tour 2025** pour l'organisation de la formation
+        - **Les formateurs et mentors** pour leur accompagnement technique et méthodologique
+        - **Les boursiers de la promotion** pour les échanges et l'entraide
+        """)
+
+    sh("Réferences")
+    with st.expander("",expanded=True):
+        st.markdown("""
+        **Sources de données** :
+        - Minnesota Department of Transportation (MnDOT) — données de trafic
+        - OpenWeatherMap — données météorologiques
+        - UCI Machine Learning Repository (dataset ID 492)
+        
+        **Bibliothèques open source** :
+        - Streamlit, Pandas, NumPy, Scikit-learn, XGBoost, SHAP, Matplotlib, Seaborn, Plotly
+        """)
+        
+    st.markdown("---")
+    
+    # ============================================
+    # SECTION 7 : CITATION
+    # ============================================
+    st.markdown("""
+    <div style="
+        text-align: center;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea10, #764ba210);
+        border-radius: 15px;
+        margin: 20px 0;
+    ">
+        <p style="font-style: italic; font-size: 14px;">
+            "Prédire le trafic, c'est anticiper la mobilité urbaine — un enjeu clé pour les villes intelligentes de demain."
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
 
 # ══════════════════════════════════════════════════════════════
 # ROUTING MODE PROFESSIONNEL
