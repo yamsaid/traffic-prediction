@@ -1741,7 +1741,7 @@ if MODE == "pro":
                     ).add_to(m)
 
                     # Affichage
-                    folium_static(m)
+                    #folium_static(m)
 
                 with col2:
                     st.markdown("""
