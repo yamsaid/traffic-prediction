@@ -8,8 +8,11 @@
 
 ## 📌 Présentation
 
+---
 ![](assets/accueil1.png)
 ![](assets/accueil2.png)
+
+---
 
 **TrafficML** est une application de prédiction du volume de trafic horaire sur l'Interstate 94, l'axe autoroutier reliant Minneapolis à Saint Paul dans le Minnesota (États-Unis). Développée dans le cadre du projet fil rouge de la formation **Africa TechUp Tour 2025 (Option Data Scientist)**, l'application utilise un modèle XGBoost optimisé pour fournir des prédictions en temps réel.
 
