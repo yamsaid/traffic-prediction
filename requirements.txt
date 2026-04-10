@@ -24,3 +24,4 @@ shap>=0.44
 #Dashboard
 streamlit>=1.20
 plotly>=5.15
+folium

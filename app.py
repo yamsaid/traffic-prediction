@@ -913,7 +913,7 @@ def display_logo(variant="default", location="main"):
             <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px auto;">
                 <span style="font-size: 24px;">📡</span>
             </div>
-            <h3 style="margin: 0; color: #667eea;">FlowCast</h3>
+            <h3 style="margin: 0; color: #667eea;">TrafficMl</h3>
             <p style="margin: 0; font-size: 10px; color: gray;">v1.0</p>
             <div style='font-size:.65rem;color:#64748B;letter-spacing:.12em;margin-top:4px;'>
             INTERSTATE 94 · MINNEAPOLIS</div>
