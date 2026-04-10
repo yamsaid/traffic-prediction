@@ -1,7 +1,5 @@
 mlenv/
-models/*.pkl
-models/*.joblib
-models/*.h5models/*.pkl
+
 __pycache__/
 *.pyc
-models/
+#models/
