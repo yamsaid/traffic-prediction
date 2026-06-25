@@ -1,4 +1,4 @@
-![header](https://capsule-render.vercel.app/api?type=cylinder&color=0:16213e,100:0f3460&height=180&text=📡%20TrafficML%20-%20Urban%20Traffic%20Prediction&fontSize=20&fontColor=ffffff&desc=XGBoost%20|%20Streamlit%20|%20SHAP%20|%20Data%20Science&descSize=15&descAlignY=75)
+![header](https://capsule-render.vercel.app/api?type=rect&color=0:16213e,100:0f3460&height=180&text=📡%20TrafficML%20-%20Urban%20Traffic%20Prediction&fontSize=20&fontColor=ffffff&desc=XGBoost%20|%20Streamlit%20|%20SHAP%20|%20Data%20Science&descSize=15&descAlignY=75)
 
 <p align="center">
 
