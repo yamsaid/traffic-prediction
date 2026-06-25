@@ -18,7 +18,7 @@
     <img src="https://img.shields.io/badge/🇫🇷%20Français-2d6a4f?style=for-the-badge" alt="Version Française"/>
   </a>
 
-  <a href="[TON_LIEN_README_EN]">
+  <a href="README_EN.md">
     <img src="https://img.shields.io/badge/🇬🇧%20English-1d3557?style=for-the-badge" alt="English Version"/>
   </a>
 </p>
